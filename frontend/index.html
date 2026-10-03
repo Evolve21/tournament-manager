@@ -1,0 +1,69 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Tournament Manager PRO</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+  <!-- Top-Leiste -->
+  <header class="topbar">
+    <div class="logo">TOURNAMENT // PRO</div>
+    <div class="topbar-actions no-print">
+      <button class="btn btn-outline" onclick="window.print()">DRUCKEN / PDF</button>
+      <button class="btn btn-danger" onclick="resetTournament()">RESET</button>
+    </div>
+  </header>
+
+  <main class="container">
+
+    <!-- 1. SETUP-PHASE -->
+    <section id="setupSection" class="panel no-print">
+      <h2>1. SETUP & TEAMS</h2>
+      <div class="setup-controls">
+        <input type="text" id="newTeamName" placeholder="TEAM NAME..." autocomplete="off">
+        <button class="btn btn-primary" onclick="addTeam()">+ TEAM</button>
+        <button class="btn btn-secondary" onclick="loadDemoTeams()">DEMO TEAMS LADEN</button>
+      </div>
+
+      <div class="team-list" id="teamList"></div>
+
+      <div class="setup-footer">
+        <label>
+          GRUPPENGROESSE:
+          <select id="groupSizeSelect">
+            <option value="4" selected>4 Teams pro Gruppe</option>
+            <option value="3">3 Teams pro Gruppe</option>
+            <option value="5">5 Teams pro Gruppe</option>
+          </select>
+        </label>
+        <button class="btn btn-success" id="startBtn" onclick="startTournament()">TURNIER STARTEN</button>
+      </div>
+      <div id="setupError" class="error-msg"></div>
+    </section>
+
+    <!-- 2. SPIEL- & TABELLEN-PHASE -->
+    <section id="tournamentSection" class="panel hidden">
+      <div class="toolbar no-print">
+        <label>
+          TEAM-FOKUS / FILTER:
+          <select id="teamFilter" onchange="renderMatches()"></select>
+        </label>
+      </div>
+
+      <!-- Tabellen-Bereich -->
+      <h2>TABELLENSTAND</h2>
+      <div id="standingsContainer" class="grid-tables"></div>
+
+      <!-- Spielplan-Bereich -->
+      <h2>SPIELTAGE & ERGEBNISSE</h2>
+      <div id="matchesContainer" class="matches-grid"></div>
+    </section>
+
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
