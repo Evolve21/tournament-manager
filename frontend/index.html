@@ -3,63 +3,117 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tournament Manager PRO</title>
+  <title>Tournament Pro // Engine</title>
   <link rel="stylesheet" href="style.css">
 </head>
 <body>
 
-  <!-- Top-Leiste -->
-  <header class="topbar">
-    <div class="logo">TOURNAMENT // PRO</div>
-    <div class="topbar-actions no-print">
-      <button class="btn btn-outline" onclick="window.print()">DRUCKEN / PDF</button>
-      <button class="btn btn-danger" onclick="resetTournament()">RESET</button>
+  <header class="navbar">
+    <div class="brand">
+      <span class="brand-badge">PRO</span>
+      <span class="brand-text">TOURNAMENT ENGINE</span>
+    </div>
+    <div class="nav-actions">
+      <button class="btn btn-secondary" onclick="window.print()">Export PDF</button>
+      <button class="btn btn-danger" onclick="resetTournament()">Reset</button>
     </div>
   </header>
 
   <main class="container">
 
-    <!-- 1. SETUP-PHASE -->
-    <section id="setupSection" class="panel no-print">
-      <h2>1. SETUP & TEAMS</h2>
-      <div class="setup-controls">
-        <input type="text" id="newTeamName" placeholder="TEAM NAME..." autocomplete="off">
-        <button class="btn btn-primary" onclick="addTeam()">+ TEAM</button>
-        <button class="btn btn-secondary" onclick="loadDemoTeams()">DEMO TEAMS LADEN</button>
+    <!-- 1. SETUP -->
+    <section id="setupSection" class="panel">
+      <div class="panel-head">
+        <h2>Modus & Kader-Setup</h2>
       </div>
 
-      <div class="team-list" id="teamList"></div>
+      <div class="mode-toggle">
+        <button class="mode-btn active" id="btnModeGroups" onclick="setMode('groups')">
+          Klassische Gruppenphase
+        </button>
+        <button class="mode-btn" id="btnModeCL" onclick="setMode('cl')">
+          Champions-League-Modus (Swiss/Liga)
+        </button>
+      </div>
 
-      <div class="setup-footer">
+      <div class="input-group">
+        <input type="text" id="newTeamName" placeholder="Team-Name eingeben..." autocomplete="off">
+        <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
+        <button class="btn btn-secondary" onclick="loadDemoTeams()">Demo-Teams (8)</button>
+      </div>
+
+      <div class="team-container" id="teamList"></div>
+
+      <!-- Config Groups -->
+      <div id="groupsConfig" class="grid-config">
         <label>
-          GRUPPENGROESSE:
-          <select id="groupSizeSelect">
-            <option value="4" selected>4 Teams pro Gruppe</option>
-            <option value="3">3 Teams pro Gruppe</option>
-            <option value="5">5 Teams pro Gruppe</option>
+          <span>Teams pro Gruppe</span>
+          <select id="groupSizeSelect" onchange="validateStart()">
+            <option value="4" selected>4 Teams</option>
+            <option value="3">3 Teams</option>
           </select>
         </label>
-        <button class="btn btn-success" id="startBtn" onclick="startTournament()">TURNIER STARTEN</button>
-      </div>
-      <div id="setupError" class="error-msg"></div>
-    </section>
-
-    <!-- 2. SPIEL- & TABELLEN-PHASE -->
-    <section id="tournamentSection" class="panel hidden">
-      <div class="toolbar no-print">
         <label>
-          TEAM-FOKUS / FILTER:
-          <select id="teamFilter" onchange="renderMatches()"></select>
+          <span>Weiterkommende pro Gruppe</span>
+          <select id="advanceGroupSelect" onchange="validateStart()">
+            <option value="2" selected>Top 2 (K.-o.-Runde)</option>
+            <option value="1">Nur Platz 1</option>
+          </select>
         </label>
       </div>
 
-      <!-- Tabellen-Bereich -->
-      <h2>TABELLENSTAND</h2>
-      <div id="standingsContainer" class="grid-tables"></div>
+      <!-- Config CL -->
+      <div id="clConfig" class="grid-config hidden">
+        <label>
+          <span>Spiele pro Team</span>
+          <input type="number" id="clMatchesInput" value="4" min="2" max="10" onchange="validateStart()">
+        </label>
+        <label>
+          <span>Weiterkommende in K.-o.-Baum (2er-Potenz)</span>
+          <select id="clAdvanceSelect" onchange="validateStart()">
+            <option value="4" selected>Top 4 (Halbfinale)</option>
+            <option value="8">Top 8 (Viertelfinale)</option>
+            <option value="2">Top 2 (Direktes Finale)</option>
+          </select>
+        </label>
+      </div>
 
-      <!-- Spielplan-Bereich -->
-      <h2>SPIELTAGE & ERGEBNISSE</h2>
-      <div id="matchesContainer" class="matches-grid"></div>
+      <div id="validationMsg" class="alert hidden"></div>
+
+      <div class="panel-foot">
+        <button class="btn btn-primary btn-large" id="startBtn" onclick="startTournament()">
+          Turnier starten ➔
+        </button>
+      </div>
+    </section>
+
+    <!-- 2. AKTIVES TURNIER -->
+    <section id="tournamentSection" class="hidden">
+      
+      <div class="panel">
+        <div class="panel-head flex-between">
+          <h2>Aktuelle Tabellen</h2>
+          <button class="btn btn-primary" id="btnTriggerKO" onclick="triggerKnockout()">
+            K.-o.-Baum generieren ➔
+          </button>
+        </div>
+        <div id="standingsContainer" class="standings-layout"></div>
+      </div>
+
+      <div class="panel">
+        <div class="panel-head">
+          <h2>Spieltage & Begegnungen</h2>
+        </div>
+        <div id="roundsContainer"></div>
+      </div>
+
+      <div class="panel" id="koCard">
+        <div class="panel-head">
+          <h2>K.-o.-Turnierbaum</h2>
+        </div>
+        <div class="bracket-container" id="bracketContainer"></div>
+      </div>
+
     </section>
 
   </main>

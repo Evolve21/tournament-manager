@@ -1,72 +1,114 @@
 const API_URL = "http://127.0.0.1:8000";
 
+let tournamentInfo = null;
+let currentMode = "groups";
 let currentTeams = [];
-let currentMatches = [];
+let allMatches = [];
 
 // ==========================================
-// 1. INITIALISIERUNG & STATUS
+// 1. INITIALISIERUNG
 // ==========================================
 async function init() {
   try {
     const res = await fetch(`${API_URL}/tournament`);
-    const tournament = await res.json();
+    tournamentInfo = await res.json();
 
-    if (tournament.status === "setup") {
+    if (tournamentInfo.status === "setup") {
       document.getElementById("setupSection").classList.remove("hidden");
       document.getElementById("tournamentSection").classList.add("hidden");
       await loadTeams();
     } else {
       document.getElementById("setupSection").classList.add("hidden");
       document.getElementById("tournamentSection").classList.remove("hidden");
-      await refreshTournamentData();
+      
+      const koBtn = document.getElementById("btnTriggerKO");
+      if (tournamentInfo.status === "knockout") {
+        koBtn.classList.add("hidden");
+      } else {
+        koBtn.classList.remove("hidden");
+      }
+      
+      await refreshData(true);
     }
   } catch (err) {
-    console.error("Backend nicht erreichbar:", err);
+    console.error("API-Verbindungsfehler:", err);
   }
 }
 
 // ==========================================
-// 2. SETUP: TEAMS VERWALTEN
+// 2. MODUS-STEUERUNG & SETUP
 // ==========================================
+function setMode(mode) {
+  currentMode = mode;
+  document.getElementById("btnModeGroups").classList.toggle("active", mode === "groups");
+  document.getElementById("btnModeCL").classList.toggle("active", mode === "cl");
+  document.getElementById("groupsConfig").classList.toggle("hidden", mode !== "groups");
+  document.getElementById("clConfig").classList.toggle("hidden", mode !== "cl");
+  validateStart();
+}
+
 async function loadTeams() {
   const res = await fetch(`${API_URL}/teams`);
   currentTeams = await res.json();
-
   const list = document.getElementById("teamList");
   list.innerHTML = "";
-  currentTeams.forEach(team => {
-    const chip = document.createElement("div");
-    chip.className = "team-chip";
-    chip.innerHTML = `
-      <span>${team.name}</span>
-      <button onclick="deleteTeam(${team.id})">×</button>
-    `;
-    list.appendChild(chip);
+  
+  currentTeams.forEach(tm => {
+    const el = document.createElement("div");
+    el.className = "team-item";
+    el.innerHTML = `<span>${tm.name}</span><button onclick="deleteTeam(${tm.id})">×</button>`;
+    list.appendChild(el);
   });
+  
+  validateStart();
+}
 
+function validateStart() {
+  const n = currentTeams.length;
   const startBtn = document.getElementById("startBtn");
-  const errDiv = document.getElementById("setupError");
+  const msg = document.getElementById("validationMsg");
+  let valid = true;
+  let text = "";
 
-  if (currentTeams.length < 4) {
-    startBtn.disabled = true;
-    errDiv.textContent = `Mindestens 4 Teams erforderlich (Aktuell: ${currentTeams.length}).`;
+  if (n < 2) {
+    valid = false;
+    text = `Mindestens 2 Teams erforderlich (Aktuell: ${n}).`;
+  } else if (currentMode === "groups") {
+    const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
+    const advance = parseInt(document.getElementById("advanceGroupSelect").value);
+    const numGroups = Math.max(1, Math.round(n / groupSize));
+    const totalQualifiers = numGroups * advance;
+
+    const isPowerOfTwo = (totalQualifiers & (totalQualifiers - 1)) === 0 && totalQualifiers >= 2;
+    if (!isPowerOfTwo) {
+      valid = false;
+      text = `Mit ${numGroups} Gruppen à ${advance} Weiterkommenden gäbe es ${totalQualifiers} Teams. Ein K.-o.-Baum benötigt 2, 4, 8 oder 16 Teams!`;
+    }
+  } else if (currentMode === "cl") {
+    const advance = parseInt(document.getElementById("clAdvanceSelect").value);
+    if (advance > n) {
+      valid = false;
+      text = `Es können nicht mehr Teams (${advance}) weiterkommen als teilnehmen (${n})!`;
+    }
+  }
+
+  startBtn.disabled = !valid;
+  if (!valid && text) {
+    msg.textContent = text;
+    msg.classList.remove("hidden");
   } else {
-    startBtn.disabled = false;
-    errDiv.textContent = "";
+    msg.classList.add("hidden");
   }
 }
 
 async function addTeam() {
   const input = document.getElementById("newTeamName");
-  const name = input.value.trim();
-  if (!name) return;
-
+  if (!input.value.trim()) return;
   await fetch(`${API_URL}/teams`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ name })
+    body: JSON.stringify({ name: input.value.trim() })
   });
-
   input.value = "";
   await loadTeams();
 }
@@ -82,190 +124,258 @@ async function loadDemoTeams() {
 }
 
 // ==========================================
-// 3. TURNIER STARTEN & RESET
+// 3. TURNIERSTART & STEUERUNG
 // ==========================================
 async function startTournament() {
   const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
+  const advance = parseInt(document.getElementById("advanceGroupSelect").value);
+  const clMatches = parseInt(document.getElementById("clMatchesInput").value);
+  const clAdvance = parseInt(document.getElementById("clAdvanceSelect").value);
 
   const res = await fetch(`${API_URL}/tournament/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
+      mode: currentMode,
       target_group_size: groupSize,
-      advance_per_group: 2,
-      cl_advance_count: 8
+      advance_per_group: advance,
+      cl_matches_per_team: clMatches,
+      cl_advance_count: clAdvance
     })
   });
+  if (res.ok) init();
+}
 
+async function triggerKnockout() {
+  const res = await fetch(`${API_URL}/tournament/start-knockout`, { method: "POST" });
   if (res.ok) {
+    document.getElementById("btnTriggerKO").classList.add("hidden");
     init();
   }
 }
 
 async function resetTournament() {
-  if (confirm("Turnier wirklich komplett zurücksetzen? Alle Ergebnisse werden gelöscht.")) {
+  if (confirm("Turnier wirklich zurücksetzen? Alle Stände werden gelöscht.")) {
     await fetch(`${API_URL}/tournament/reset`, { method: "POST" });
     init();
   }
 }
 
 // ==========================================
-// 4. SPIEL- & TABELLEN-DATEN RENDERN
+// 4. RENDERING DER SPIELE & TABELLEN
 // ==========================================
-async function refreshTournamentData() {
-  // Matches laden
+async function refreshData(renderAll = false) {
   const mRes = await fetch(`${API_URL}/matches`);
-  currentMatches = await mRes.json();
-
-  // Filter-Dropdown füllen
-  const tRes = await fetch(`${API_URL}/teams`);
-  currentTeams = await tRes.json();
-  const filter = document.getElementById("teamFilter");
-  filter.innerHTML = `<option value="ALL">ALLE TEAMS ANZEIGEN</option>`;
-  currentTeams.forEach(t => {
-    filter.innerHTML += `<option value="${t.id}">${t.name}</option>`;
-  });
-
-  renderMatches();
+  allMatches = await mRes.json();
   await renderStandings();
+  if (renderAll) {
+    renderRounds();
+  }
+  renderBracket();
+  attachInputListeners();
 }
 
 async function renderStandings() {
   const res = await fetch(`${API_URL}/standings`);
-  const standingsByGroup = await res.json();
-  const container = document.getElementById("standingsContainer");
-  container.innerHTML = "";
+  const data = await res.json();
+  const c = document.getElementById("standingsContainer");
+  c.innerHTML = "";
 
-  for (const [groupName, rows] of Object.entries(standingsByGroup)) {
+  const advanceLimit = tournamentInfo ? tournamentInfo.advance_count : 2;
+
+  for (const [groupName, rows] of Object.entries(data)) {
     let html = `
-      <div class="panel">
-        <h3>GRUPPE ${groupName}</h3>
+      <div style="margin-bottom: 20px;">
+        <span class="table-title">// ${groupName}</span>
         <table>
           <thead>
             <tr>
               <th>#</th>
-              <th>TEAM</th>
-              <th>SP</th>
+              <th>Team</th>
+              <th>Sp</th>
               <th>S</th>
               <th>U</th>
               <th>N</th>
-              <th>TORE</th>
-              <th>DIFF</th>
-              <th>PKT</th>
+              <th>Tore</th>
+              <th>Diff</th>
+              <th>Pkt</th>
             </tr>
           </thead>
           <tbody>
     `;
 
-    rows.forEach((row, idx) => {
-      // Top 2 optisch hervorheben (qualifiziert)
-      const qualifyClass = idx < 2 ? "qualify-row" : "";
+    rows.forEach((r, idx) => {
+      const q = idx < advanceLimit ? "class='qualify'" : "";
       html += `
-        <tr class="${qualifyClass}">
+        <tr ${q}>
           <td>${idx + 1}</td>
-          <td class="team-col">${row.name}</td>
-          <td>${row.played}</td>
-          <td>${row.won}</td>
-          <td>${row.drawn}</td>
-          <td>${row.lost}</td>
-          <td>${row.gf}:${row.ga}</td>
-          <td>${row.gd > 0 ? "+" + row.gd : row.gd}</td>
-          <td><strong>${row.points}</strong></td>
+          <td><strong>${r.name}</strong></td>
+          <td>${r.played}</td>
+          <td>${r.won}</td>
+          <td>${r.drawn}</td>
+          <td>${r.lost}</td>
+          <td>${r.gf}:${r.ga}</td>
+          <td>${r.gd > 0 ? "+" + r.gd : r.gd}</td>
+          <td><strong>${r.points}</strong></td>
         </tr>
       `;
     });
 
     html += `</tbody></table></div>`;
-    container.innerHTML += html;
+    c.innerHTML += html;
   }
 }
 
-function renderMatches() {
-  const selectedTeamId = document.getElementById("teamFilter").value;
-  const container = document.getElementById("matchesContainer");
-  container.innerHTML = "";
+function renderRounds() {
+  const c = document.getElementById("roundsContainer");
+  c.innerHTML = "";
 
-  currentMatches.forEach((m, idx) => {
-    // Filter prüfen
-    if (selectedTeamId !== "ALL") {
-      const id = parseInt(selectedTeamId);
-      if (m.home_team_id !== id && m.away_team_id !== id) return;
-    }
+  const groupMatches = allMatches.filter(m => m.stage === "group");
+  const rounds = {};
+  groupMatches.forEach(m => {
+    rounds[m.round_number] = rounds[m.round_number] || [];
+    rounds[m.round_number].push(m);
+  });
 
-    const homeVal = m.home_score !== null ? m.home_score : "";
-    const awayVal = m.away_score !== null ? m.away_score : "";
+  for (const [rNum, matches] of Object.entries(rounds)) {
+    const block = document.createElement("div");
+    block.className = "round-box";
+    block.innerHTML = `
+      <span class="round-header">// SPIELTAG ${rNum}</span>
+      <div class="matches-grid" id="rg-${rNum}"></div>
+    `;
+    c.appendChild(block);
 
-    const card = document.createElement("div");
-    card.className = "match-card";
-    card.innerHTML = `
-      <div class="match-header">
-        <span>SPIELTAG ${m.round_number}</span>
-        <span>ID: #${m.id}</span>
-      </div>
-      <div class="match-teams">
-        <span class="match-team-name">${m.home_team_name}</span>
-        <div class="match-score-inputs">
-          <input type="number" min="0" value="${homeVal}" 
-                 id="score-home-${m.id}" 
-                 data-match-id="${m.id}" 
-                 data-type="home"
-                 data-index="${idx * 2}">
+    const grid = block.querySelector(`#rg-${rNum}`);
+    matches.forEach(m => {
+      grid.appendChild(createMatchCard(m));
+    });
+  }
+}
+
+function renderBracket() {
+  const c = document.getElementById("bracketContainer");
+  c.innerHTML = "";
+  const koMatches = allMatches.filter(m => m.stage === "knockout");
+  if (koMatches.length === 0) {
+    c.innerHTML = `<p style="color:var(--text-muted); font-size:0.88rem;">Vorrunde spielen und oben 'K.-o.-Baum generieren' anklicken.</p>`;
+    return;
+  }
+
+  const roundMap = {};
+  koMatches.forEach(m => {
+    roundMap[m.round_number] = roundMap[m.round_number] || [];
+    roundMap[m.round_number].push(m);
+  });
+
+  const sortedRounds = Object.keys(roundMap).map(Number).sort((a, b) => b - a);
+
+  sortedRounds.forEach(r => {
+    const col = document.createElement("div");
+    col.className = "bracket-col";
+    const title = r === 1 ? "FINALE" : (r === 2 ? "HALBFINALE" : (r === 4 ? "VIERTELFINALE" : `RUNDE DER LETZTEN ${r * 2}`));
+    col.innerHTML = `<div class="bracket-col-title">// ${title}</div>`;
+    roundMap[r].forEach(m => {
+      col.appendChild(createMatchCard(m, true));
+    });
+    c.appendChild(col);
+  });
+}
+
+function createMatchCard(m, isKO = false) {
+  const card = document.createElement("div");
+  card.className = "match-card";
+  const hVal = m.home_score !== null ? m.home_score : "";
+  const aVal = m.away_score !== null ? m.away_score : "";
+
+  let penaltyHtml = "";
+  if (isKO && m.home_score !== null && m.home_score === m.away_score && m.home_score !== "") {
+    const hp = m.home_penalty !== null ? m.home_penalty : "";
+    const ap = m.away_penalty !== null ? m.away_penalty : "";
+    penaltyHtml = `
+      <div class="penalty-row">
+        <span>Elfmeter:</span>
+        <div class="score-box">
+          <input type="number" class="score-input" data-match-id="${m.id}" data-field="home_penalty" value="${hp}">
           <span>:</span>
-          <input type="number" min="0" value="${awayVal}" 
-                 id="score-away-${m.id}" 
-                 data-match-id="${m.id}" 
-                 data-type="away"
-                 data-index="${idx * 2 + 1}">
+          <input type="number" class="score-input" data-match-id="${m.id}" data-field="away_penalty" value="${ap}">
         </div>
-        <span class="match-team-name away">${m.away_team_name}</span>
       </div>
     `;
-    container.appendChild(card);
-  });
+  }
 
-  setupEnterKeyNavigation();
+  card.innerHTML = `
+    <div class="match-row">
+      <span class="team-title">${m.home_team_name}</span>
+      <div class="score-box">
+        <input type="number" min="0" class="score-input" data-match-id="${m.id}" data-field="home_score" value="${hVal}">
+        <span>:</span>
+        <input type="number" min="0" class="score-input" data-match-id="${m.id}" data-field="away_score" value="${aVal}">
+      </div>
+      <span class="team-title away">${m.away_team_name}</span>
+    </div>
+    ${penaltyHtml}
+  `;
+  return card;
 }
 
 // ==========================================
-// 5. UX: BLITZ-EINGABE MIT ENTER-TASTE
+// 5. INPUT & AUTO-SAVE
 // ==========================================
-function setupEnterKeyNavigation() {
-  const inputs = Array.from(document.querySelectorAll('.match-score-inputs input'));
+function attachInputListeners() {
+  const inputs = Array.from(document.querySelectorAll(".score-input"));
 
-  inputs.forEach(input => {
-    input.addEventListener("keydown", async (e) => {
+  inputs.forEach((input, idx) => {
+    input.onchange = async () => {
+      await saveMatch(input.dataset.matchId);
+    };
+
+    input.onkeydown = async (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
-        
-        // 1. Ergebnis speichern
-        const matchId = input.dataset.matchId;
-        const homeScoreVal = document.getElementById(`score-home-${matchId}`).value;
-        const awayScoreVal = document.getElementById(`score-away-${matchId}`).value;
-
-        if (homeScoreVal !== "" && awayScoreVal !== "") {
-          await fetch(`${API_URL}/matches/${matchId}/score`, {
-            method: "PUT",
-            headers: { "Content-Type": "application/json" },
-            body: JSON.stringify({
-              home_score: parseInt(homeScoreVal),
-              away_score: parseInt(awayScoreVal)
-            })
-          });
-          // Tabelle neu berechnen
-          await renderStandings();
-        }
-
-        // 2. Cursor ins nächste Eingabefeld springen lassen
-        const currentIndex = parseInt(input.dataset.index);
-        const nextInput = inputs.find(i => parseInt(i.dataset.index) === currentIndex + 1);
-        if (nextInput) {
-          nextInput.focus();
-          nextInput.select();
+        await saveMatch(input.dataset.matchId);
+        if (inputs[idx + 1]) {
+          inputs[idx + 1].focus();
+          inputs[idx + 1].select();
         }
       }
-    });
+    };
   });
 }
 
-// Start beim Laden der Seite
+async function saveMatch(matchId) {
+  const hInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="home_score"]`);
+  const aInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="away_score"]`);
+  const hpInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="home_penalty"]`);
+  const apInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="away_penalty"]`);
+
+  if (!hInput || !aInput || hInput.value === "" || aInput.value === "") return;
+
+  const payload = {
+    home_score: parseInt(hInput.value),
+    away_score: parseInt(aInput.value),
+    home_penalty: hpInput && hpInput.value !== "" ? parseInt(hpInput.value) : null,
+    away_penalty: apInput && apInput.value !== "" ? parseInt(apInput.value) : null
+  };
+
+  await fetch(`${API_URL}/matches/${matchId}/score`, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload)
+  });
+
+  await refreshData(false);
+}
+
+
+
+// Enter-Taste für Team-Hinzufügen
+document.getElementById("newTeamName").addEventListener("keydown", (e) => {
+  if (e.key === "Enter") {
+    e.preventDefault();
+    addTeam();
+  }
+});
+
+
 init();

@@ -1,19 +1,18 @@
+import random
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
-from typing import List, Dict, Any
+from typing import List
 
 from database import engine, Base, get_db
 import models
 import schemas
 import tournament_logic as logic
 
-# 1. Erstellt alle Tabellen in SQLite, falls sie noch nicht existieren
 Base.metadata.create_all(bind=engine)
 
-app = FastAPI(title="Tournament Manager Pro API")
+app = FastAPI(title="Tournament Manager Pro")
 
-# 2. CORS (Cross-Origin Resource Sharing): Erlaubt unserem Frontend Zugriff
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -22,19 +21,14 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Hilfsfunktion: Holt oder erstellt das Standard-Turnier (ID 1)
 def get_default_tournament(db: Session) -> models.Tournament:
     t = db.query(models.Tournament).first()
     if not t:
-        t = models.Tournament(name="Tournament Pro", mode="groups", status="setup")
+        t = models.Tournament(name="Tournament Pro", mode="groups", status="setup", advance_count=2)
         db.add(t)
         db.commit()
         db.refresh(t)
     return t
-
-# ==========================================
-# ENDPUNKTE: TURNIER-STATUS & RESET
-# ==========================================
 
 @app.get("/tournament")
 def get_tournament_info(db: Session = Depends(get_db)):
@@ -44,22 +38,19 @@ def get_tournament_info(db: Session = Depends(get_db)):
         "name": t.name,
         "mode": t.mode,
         "has_return_matches": t.has_return_matches,
+        "advance_count": t.advance_count,
         "status": t.status
     }
 
 @app.post("/tournament/reset")
 def reset_tournament(db: Session = Depends(get_db)):
     t = get_default_tournament(db)
-    # Alle Matches und Teams löschen
     db.query(models.Match).filter(models.Match.tournament_id == t.id).delete()
     db.query(models.Team).filter(models.Team.tournament_id == t.id).delete()
     t.status = "setup"
+    t.advance_count = 2
     db.commit()
-    return {"message": "Turnier erfolgreich zurückgesetzt."}
-
-# ==========================================
-# ENDPUNKTE: TEAMS VERWALTEN
-# ==========================================
+    return {"message": "Zurückgesetzt."}
 
 @app.get("/teams", response_model=List[schemas.TeamResponse])
 def get_teams(db: Session = Depends(get_db)):
@@ -70,8 +61,7 @@ def get_teams(db: Session = Depends(get_db)):
 def add_team(team_in: schemas.TeamCreate, db: Session = Depends(get_db)):
     t = get_default_tournament(db)
     if t.status != "setup":
-        raise HTTPException(status_code=400, detail="Turnier läuft bereits. Keine neuen Teams erlaubt.")
-    
+        raise HTTPException(status_code=400, detail="Turnier läuft bereits.")
     new_team = models.Team(name=team_in.name.strip(), tournament_id=t.id)
     db.add(new_team)
     db.commit()
@@ -81,23 +71,15 @@ def add_team(team_in: schemas.TeamCreate, db: Session = Depends(get_db)):
 @app.delete("/teams/{team_id}")
 def delete_team(team_id: int, db: Session = Depends(get_db)):
     t = get_default_tournament(db)
-    if t.status != "setup":
-        raise HTTPException(status_code=400, detail="Teams können nur in der Setup-Phase gelöscht werden.")
-    
     team = db.query(models.Team).filter(models.Team.id == team_id, models.Team.tournament_id == t.id).first()
-    if not team:
-        raise HTTPException(status_code=404, detail="Team nicht gefunden.")
-    
-    db.delete(team)
-    db.commit()
-    return {"message": "Team gelöscht."}
+    if team:
+        db.delete(team)
+        db.commit()
+    return {"message": "Gelöscht"}
 
 @app.post("/teams/demo")
 def load_demo_teams(db: Session = Depends(get_db)):
     t = get_default_tournament(db)
-    if t.status != "setup":
-        raise HTTPException(status_code=400, detail="Nur in Setup-Phase möglich.")
-    
     db.query(models.Team).filter(models.Team.tournament_id == t.id).delete()
     demo_names = [
         "Real Madrid", "Manchester City", "Bayern München", "FC Barcelona",
@@ -106,81 +88,155 @@ def load_demo_teams(db: Session = Depends(get_db)):
     for name in demo_names:
         db.add(models.Team(name=name, tournament_id=t.id))
     db.commit()
-    return {"message": "8 Demo-Teams erfolgreich geladen."}
-
-# ==========================================
-# ENDPUNKT: TURNIER STARTEN & SPIELPLAN ERZEUGEN
-# ==========================================
+    return {"message": "Demo-Teams geladen."}
 
 @app.post("/tournament/start")
 def start_tournament(config: schemas.TournamentStartConfig, db: Session = Depends(get_db)):
     t = get_default_tournament(db)
     teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
-    
-    if len(teams) < 4:
-        raise HTTPException(status_code=400, detail="Mindestens 4 Teams erforderlich.")
+    if len(teams) < 2:
+        raise HTTPException(status_code=400, detail="Mindestens 2 Teams erforderlich.")
 
-    # 1. Gruppen einteilen
-    team_ids = [team.id for team in teams]
-    group_mapping = logic.split_into_groups(team_ids, config.target_group_size)
+    t.mode = config.mode
+    team_ids = [tm.id for tm in teams]
+    random.shuffle(team_ids)
+    all_matches = []
 
-    # Gruppennamen den Teams in der DB zuweisen
-    for group_name, members in group_mapping.items():
-        for team_id in members:
-            team_obj = db.query(models.Team).get(team_id)
-            if team_obj:
-                team_obj.group_name = group_name
+    if config.mode == "groups":
+        group_mapping = logic.split_into_groups(team_ids, config.target_group_size)
+        total_qualifiers = len(group_mapping) * config.advance_per_group
+        if not logic.is_power_of_two(total_qualifiers):
+            raise HTTPException(status_code=400, detail=f"Gesamtzahl Qualifikanten ({total_qualifiers}) muss eine 2er-Potenz sein (2, 4, 8)!")
 
-    # 2. Spielplan für jede Gruppe generieren
-    all_generated_matches = []
-    for group_name, members in group_mapping.items():
-        group_matches = logic.generate_round_robin_matches(members, t.has_return_matches)
-        all_generated_matches.extend(group_matches)
+        t.advance_count = config.advance_per_group
+        for g_name, members in group_mapping.items():
+            for tid in members:
+                tm = db.query(models.Team).get(tid)
+                if tm: tm.group_name = g_name
+            all_matches.extend(logic.generate_round_robin_matches(members, t.has_return_matches))
+    else:
+        if not logic.is_power_of_two(config.cl_advance_count):
+            raise HTTPException(status_code=400, detail="Qualifikanten-Anzahl muss eine 2er-Potenz sein (2, 4, 8)!")
+        t.advance_count = config.cl_advance_count
+        for tm in teams:
+            tm.group_name = "Liga"
+        all_matches = logic.generate_cl_matches(team_ids, config.cl_matches_per_team)
 
-    # 3. Matches in Datenbank speichern
-    for m in all_generated_matches:
-        db_match = models.Match(
+    for m in all_matches:
+        db.add(models.Match(
             tournament_id=t.id,
             home_team_id=m["home_team_id"],
             away_team_id=m["away_team_id"],
             round_number=m["round_number"],
             stage="group"
-        )
-        db.add(db_match)
+        ))
 
     t.status = "group_stage"
     db.commit()
-    return {"message": "Turnier gestartet und Spielplan erstellt."}
+    return {"message": "Gestartet"}
 
-# ==========================================
-# ENDPUNKTE: MATCHES & SCORE UPDATE
-# ==========================================
+@app.post("/tournament/start-knockout")
+def start_knockout(db: Session = Depends(get_db)):
+    t = get_default_tournament(db)
+    existing_ko = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "knockout").first()
+    if existing_ko:
+        raise HTTPException(status_code=400, detail="K.-o.-Baum existiert bereits.")
+
+    teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
+    group_matches = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "group").all()
+
+    qualified = []
+    if t.mode == "groups":
+        groups = {}
+        for tm in teams:
+            groups.setdefault(tm.group_name, []).append(tm)
+        for g_name, g_teams in sorted(groups.items()):
+            g_ids = {tm.id for tm in g_teams}
+            m_list = [m for m in group_matches if m.home_team_id in g_ids and m.away_team_id in g_ids]
+            standings = logic.calculate_standings(g_teams, m_list)
+            for idx in range(t.advance_count):
+                if idx < len(standings):
+                    qualified.append({"id": standings[idx]["id"], "seed": idx + 1})
+    else:
+        standings = logic.calculate_standings(teams, group_matches)
+        for s in standings[:t.advance_count]:
+            qualified.append({"id": s["id"], "seed": 1})
+
+    k = len(qualified)
+    if k < 2 or not logic.is_power_of_two(k):
+        raise HTTPException(status_code=400, detail=f"Ungültige Qualifikantenanzahl ({k}).")
+
+    # Baum von Finale rückwärts aufbauen für perfekte Verknüpfung
+    first_round_slots = k // 2
+    bracket_pairs = []
+    if t.mode == "groups" and any(item.get("seed") == 2 for item in qualified):
+        firsts = [item for item in qualified if item.get("seed") == 1]
+        seconds = [item for item in qualified if item.get("seed") == 2]
+        seconds.reverse()
+        for i in range(first_round_slots):
+            bracket_pairs.append((firsts[i]["id"], seconds[i]["id"]))
+    else:
+        for i in range(first_round_slots):
+            bracket_pairs.append((qualified[i]["id"], qualified[k - 1 - i]["id"]))
+
+    # Finale erstellen
+    final_match = models.Match(
+        tournament_id=t.id, stage="knockout", round_number=1, bracket_slot=1
+    )
+    db.add(final_match)
+    db.flush()
+
+    # Runden rückwärts verlinken
+    current_level = [final_match]
+    current_count = 1
+
+    while current_count < first_round_slots:
+        next_level = []
+        for parent in current_level:
+            m_home = models.Match(
+                tournament_id=t.id, stage="knockout", round_number=parent.round_number * 2,
+                next_match_id=parent.id, next_match_slot="home"
+            )
+            m_away = models.Match(
+                tournament_id=t.id, stage="knockout", round_number=parent.round_number * 2,
+                next_match_id=parent.id, next_match_slot="away"
+            )
+            db.add(m_home)
+            db.add(m_away)
+            db.flush()
+            next_level.extend([m_home, m_away])
+        current_level = next_level
+        current_count *= 2
+
+    # Teams in die erste Runde setzen
+    for idx, match in enumerate(current_level):
+        match.home_team_id = bracket_pairs[idx][0]
+        match.away_team_id = bracket_pairs[idx][1]
+
+    t.status = "knockout"
+    db.commit()
+    return {"message": "K.-o.-Baum generiert."}
 
 @app.get("/matches")
 def get_matches(db: Session = Depends(get_db)):
     t = get_default_tournament(db)
-    matches = db.query(models.Match).filter(models.Match.tournament_id == t.id).all()
+    matches = db.query(models.Match).filter(models.Match.tournament_id == t.id).order_by(models.Match.stage.desc(), models.Match.round_number.desc(), models.Match.id).all()
+    lookup = {tm.id: tm.name for tm in db.query(models.Team).filter(models.Team.tournament_id == t.id).all()}
     
-    # IDs in echte Team-Namen auflösen für das Frontend
-    team_lookup = {team.id: team.name for team in db.query(models.Team).filter(models.Team.tournament_id == t.id).all()}
-    
-    result = []
-    for m in matches:
-        result.append({
-            "id": m.id,
-            "round_number": m.round_number,
-            "stage": m.stage,
-            "home_team_id": m.home_team_id,
-            "away_team_id": m.away_team_id,
-            "home_team_name": team_lookup.get(m.home_team_id, "TBD"),
-            "away_team_name": team_lookup.get(m.away_team_id, "TBD"),
-            "home_score": m.home_score,
-            "away_score": m.away_score,
-            "home_penalty": m.home_penalty,
-            "away_penalty": m.away_penalty,
-            "bracket_slot": m.bracket_slot
-        })
-    return result
+    return [{
+        "id": m.id,
+        "round_number": m.round_number,
+        "stage": m.stage,
+        "home_team_id": m.home_team_id,
+        "away_team_id": m.away_team_id,
+        "home_team_name": lookup.get(m.home_team_id, "TBD"),
+        "away_team_name": lookup.get(m.away_team_id, "TBD"),
+        "home_score": m.home_score,
+        "away_score": m.away_score,
+        "home_penalty": m.home_penalty,
+        "away_penalty": m.away_penalty,
+        "next_match_id": m.next_match_id
+    } for m in matches]
 
 @app.put("/matches/{match_id}/score")
 def update_score(match_id: int, score_data: schemas.MatchUpdateScore, db: Session = Depends(get_db)):
@@ -193,12 +249,29 @@ def update_score(match_id: int, score_data: schemas.MatchUpdateScore, db: Sessio
     m.home_penalty = score_data.home_penalty
     m.away_penalty = score_data.away_penalty
 
-    db.commit()
-    return {"message": "Ergebnis aktualisiert."}
+    # AUTO-ADVANCE IM K.-O.-BAUM
+    if m.stage == "knockout" and m.next_match_id:
+        winner_id = None
+        if m.home_score is not None and m.away_score is not None:
+            if m.home_score > m.away_score:
+                winner_id = m.home_team_id
+            elif m.away_score > m.home_score:
+                winner_id = m.away_team_id
+            elif m.home_penalty is not None and m.away_penalty is not None:
+                if m.home_penalty > m.away_penalty:
+                    winner_id = m.home_team_id
+                elif m.away_penalty > m.home_penalty:
+                    winner_id = m.away_team_id
 
-# ==========================================
-# ENDPUNKT: TABELLENSTÄNDE (STANDINGS)
-# ==========================================
+        next_m = db.query(models.Match).get(m.next_match_id)
+        if next_m:
+            if m.next_match_slot == "home":
+                next_m.home_team_id = winner_id
+            else:
+                next_m.away_team_id = winner_id
+
+    db.commit()
+    return {"message": "Gespeichert"}
 
 @app.get("/standings")
 def get_standings(db: Session = Depends(get_db)):
@@ -206,17 +279,14 @@ def get_standings(db: Session = Depends(get_db)):
     teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
     matches = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "group").all()
 
-    # Nach Gruppen trennen und auswerten
-    groups: Dict[str, List[models.Team]] = {}
+    groups = {}
     for team in teams:
         g = team.group_name or "Tabelle"
         groups.setdefault(g, []).append(team)
 
-    standings_by_group = {}
+    res = {}
     for g_name, g_teams in sorted(groups.items()):
-        g_team_ids = {team.id for team in g_teams}
-        # Nur Spiele dieser Gruppe filtern
-        g_matches = [m for m in matches if m.home_team_id in g_team_ids and m.away_team_id in g_team_ids]
-        standings_by_group[g_name] = logic.calculate_standings(g_teams, g_matches)
-
-    return standings_by_group
+        g_ids = {tm.id for tm in g_teams}
+        g_matches = [m for m in matches if m.home_team_id in g_ids and m.away_team_id in g_ids]
+        res[g_name] = logic.calculate_standings(g_teams, g_matches)
+    return res
