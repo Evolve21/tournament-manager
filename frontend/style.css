@@ -544,3 +544,136 @@ tr.qualify {
   }
 }
 
+/* ==========================================
+   MOBILE & SMARTPHONE OPTIMIERUNG
+   ========================================== */
+@media (max-width: 768px) {
+  /* 1. Grundlayout & Abstände kompakter machen */
+  body, html {
+    overflow-x: hidden;
+  }
+
+  .container {
+    padding: 12px 10px !important;
+    width: 100% !important;
+  }
+
+  .panel {
+    padding: 16px 12px !important;
+    margin-bottom: 16px !important;
+  }
+
+  /* 2. Obere Navbar sauber untereinander stapeln */
+  .navbar {
+    flex-direction: column !important;
+    align-items: flex-start !important;
+    gap: 12px !important;
+    padding: 14px 12px !important;
+  }
+
+  .nav-actions {
+    width: 100% !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    gap: 8px !important;
+  }
+
+  .nav-actions .btn {
+    flex: 1 1 calc(50% - 8px) !important;
+    text-align: center !important;
+    justify-content: center !important;
+    font-size: 0.8rem !important;
+    padding: 10px 8px !important;
+  }
+
+  /* 3. Panel-Kopfzeilen & Buttons innerhalb der Boxen halten */
+  .panel-head,
+  .flex-between {
+    flex-direction: column !important;
+    align-items: stretch !important;
+    gap: 10px !important;
+  }
+
+  .panel-head .btn,
+  #btnTriggerKO {
+    width: 100% !important;
+    text-align: center !important;
+    justify-content: center !important;
+  }
+
+  /* 4. Setup-Felder & Team-Eingabe untereinander statt nebeneinander */
+  .grid-config,
+  .add-team-row,
+  .input-group {
+    grid-template-columns: 1fr !important;
+    flex-direction: column !important;
+    gap: 10px !important;
+    width: 100% !important;
+  }
+
+  .add-team-row input,
+  .add-team-row .btn,
+  input[type="text"],
+  input[type="number"],
+  select {
+    width: 100% !important;
+    box-sizing: border-box !important;
+  }
+
+  /* 5. Tabellen auf Handys scrollbar machen & Schrift anpassen */
+  #standingsContainer,
+  #pastTournamentsContainer {
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+    width: 100% !important;
+  }
+
+  table {
+    font-size: 0.78rem !important;
+    min-width: 100% !important;
+  }
+
+  th, td {
+    padding: 8px 6px !important;
+    white-space: nowrap;
+  }
+
+  /* 6. Spielplan & Match-Karten perfekt zentrieren */
+  .matches-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .match-card {
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
+    gap: 8px !important;
+    padding: 12px 10px !important;
+  }
+
+  .match-card .team-name {
+    width: 100% !important;
+    text-align: center !important;
+    font-size: 0.9rem !important;
+    white-space: normal !important;
+  }
+
+  .score-box {
+    justify-content: center !important;
+    margin: 4px 0 !important;
+  }
+
+  /* 7. K.-o.-Turnierbaum horizontal wischbar machen */
+  .bracket-container,
+  #koBracket {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 16px !important;
+    overflow-x: hidden !important;
+  }
+
+  .bracket-column {
+    width: 100% !important;
+    min-width: 100% !important;
+  }
+}
