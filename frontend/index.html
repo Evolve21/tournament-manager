@@ -27,6 +27,18 @@
         <h2>Modus & Kader-Setup</h2>
       </div>
 
+      <div class="grid-config">
+            <label>
+              <span>Turniername</span>
+              <input type="text" id="tourneyNameInput" value="Bahce Cup" placeholder="z.B. Sommer Cup">
+            </label>
+            <label>
+              <span>Austragungsjahr</span>
+              <input type="number" id="tourneyYearInput" value="2026">
+            </label>
+          </div>
+
+
       <div class="mode-toggle">
         <button class="mode-btn active" id="btnModeGroups" onclick="setMode('groups')">
           Klassische Gruppenphase
@@ -108,13 +120,26 @@
       </div>
 
       <div class="panel" id="koCard">
-        <div class="panel-head">
+                <div class="panel-head flex-between">
           <h2>K.-o.-Turnierbaum</h2>
+          <button class="btn btn-primary" onclick="archiveTournament()">
+            Turnier abschließen & archivieren ★
+          </button>
         </div>
+
         <div class="bracket-container" id="bracketContainer"></div>
       </div>
 
     </section>
+
+    <!-- 3. DAUERHAFTES ARCHIV (PAST TOURNAMENTS) -->
+    <section class="panel">
+      <div class="panel-head">
+        <h2>Past Tournaments // Hall of Fame</h2>
+      </div>
+      <div id="pastTournamentsContainer"></div>
+    </section>
+
 
   </main>
 

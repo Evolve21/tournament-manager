@@ -1,4 +1,5 @@
-const API_URL = "http://127.0.0.1:8000";
+const API_URL = window.location.origin;
+
 
 let tournamentInfo = null;
 let currentMode = "groups";
@@ -30,6 +31,8 @@ async function init() {
       
       await refreshData(true);
     }
+    await loadPastTournaments();
+
   } catch (err) {
     console.error("API-Verbindungsfehler:", err);
   }
@@ -140,7 +143,10 @@ async function startTournament() {
       target_group_size: groupSize,
       advance_per_group: advance,
       cl_matches_per_team: clMatches,
-      cl_advance_count: clAdvance
+      cl_advance_count: clAdvance,
+      name: document.getElementById("tourneyNameInput").value.trim() || "Tournament Pro",
+      year: parseInt(document.getElementById("tourneyYearInput").value) || 2026,
+
     })
   });
   if (res.ok) init();
@@ -376,6 +382,55 @@ document.getElementById("newTeamName").addEventListener("keydown", (e) => {
     addTeam();
   }
 });
+
+
+async function loadPastTournaments() {
+  const res = await fetch(`${API_URL}/past-tournaments`);
+  const list = await res.json();
+  const c = document.getElementById("pastTournamentsContainer");
+  if (!list.length) {
+    c.innerHTML = `<p style="color:var(--text-muted); font-size:0.88rem;">Noch keine abgeschlossenen Turniere im Archiv.</p>`;
+    return;
+  }
+
+  let html = `
+    <table>
+      <thead>
+        <tr>
+          <th>Jahr</th>
+          <th>Turnier</th>
+          <th>Champion 🏆</th>
+          <th>Runner-Up</th>
+          <th>Top-Scorer (Tore)</th>
+        </tr>
+      </thead>
+      <tbody>
+  `;
+  list.forEach(item => {
+    html += `
+      <tr class="qualify">
+        <td><strong>${item.year}</strong></td>
+        <td>${item.tournament_name}</td>
+        <td><strong style="color:var(--green-light);">${item.winner_name}</strong></td>
+        <td>${item.runner_up_name}</td>
+        <td>${item.top_scorer_name} (${item.top_scorer_goals})</td>
+      </tr>
+    `;
+  });
+  html += `</tbody></table>`;
+  c.innerHTML = html;
+}
+
+async function archiveTournament() {
+  if (!confirm("Turnier abschließen, Sieger in 'Past Tournaments' verewigen und neues Turnier vorbereiten?")) return;
+  const res = await fetch(`${API_URL}/tournament/archive`, { method: "POST" });
+  if (!res.ok) {
+    const err = await res.json();
+    alert(err.detail || "Bitte erst das Finale vollständig eintragen!");
+    return;
+  }
+  init();
+}
 
 
 init();
