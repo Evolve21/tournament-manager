@@ -1,4 +1,5 @@
 import random
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, Depends, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy.orm import Session
@@ -98,6 +99,9 @@ def start_tournament(config: schemas.TournamentStartConfig, db: Session = Depend
         raise HTTPException(status_code=400, detail="Mindestens 2 Teams erforderlich.")
 
     t.mode = config.mode
+    t.name = config.name
+    t.year = config.year
+
     team_ids = [tm.id for tm in teams]
     random.shuffle(team_ids)
     all_matches = []
@@ -290,3 +294,54 @@ def get_standings(db: Session = Depends(get_db)):
         g_matches = [m for m in matches if m.home_team_id in g_ids and m.away_team_id in g_ids]
         res[g_name] = logic.calculate_standings(g_teams, g_matches)
     return res
+
+@app.get("/past-tournaments")
+def get_past_tournaments(db: Session = Depends(get_db)):
+    return db.query(models.PastTournament).order_by(models.PastTournament.id.desc()).all()
+
+@app.post("/tournament/archive")
+def archive_tournament(db: Session = Depends(get_db)):
+    t = get_default_tournament(db)
+    final = db.query(models.Match).filter_by(tournament_id=t.id, stage="knockout", round_number=1).first()
+    if not final or final.home_score is None or final.away_score is None:
+        raise HTTPException(status_code=400, detail="Finale ist noch nicht beendet.")
+
+    # Sieger & Vize bestimmen
+    if final.home_score > final.away_score or (final.home_score == final.away_score and (final.home_penalty or 0) > (final.away_penalty or 0)):
+        winner_id, runner_id = final.home_team_id, final.away_team_id
+    else:
+        winner_id, runner_id = final.away_team_id, final.home_team_id
+
+    winner = db.query(models.Team).get(winner_id)
+    runner = db.query(models.Team).get(runner_id)
+
+    # Torschützenkönig über das gesamte Turnier berechnen
+    teams = db.query(models.Team).filter_by(tournament_id=t.id).all()
+    matches = db.query(models.Match).filter_by(tournament_id=t.id).all()
+    goals = {tm.id: 0 for tm in teams}
+    for m in matches:
+        if m.home_score is not None and m.away_score is not None:
+            if m.home_team_id in goals: goals[m.home_team_id] += m.home_score
+            if m.away_team_id in goals: goals[m.away_team_id] += m.away_score
+
+    top_id = max(goals, key=goals.get) if goals else None
+    top_team = db.query(models.Team).get(top_id) if top_id else None
+
+    entry = models.PastTournament(
+        tournament_name=t.name,
+        year=t.year,
+        winner_name=winner.name if winner else "-",
+        runner_up_name=runner.name if runner else "-",
+        top_scorer_name=top_team.name if top_team else "-",
+        top_scorer_goals=goals.get(top_id, 0) if top_id else 0
+    )
+    db.add(entry)
+
+    # Aktives Turnier zurücksetzen, Archiv bleibt dauerhaft bestehen
+    db.query(models.Match).filter_by(tournament_id=t.id).delete()
+    db.query(models.Team).filter_by(tournament_id=t.id).delete()
+    t.status = "setup"
+    db.commit()
+    return {"status": "archived"}
+
+app.mount("/", StaticFiles(directory="../frontend", html=True), name="frontend")

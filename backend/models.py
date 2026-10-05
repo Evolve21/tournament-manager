@@ -7,6 +7,7 @@ class Tournament(Base):
 
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, default="Tournament Pro")
+    year = Column(Integer, default=2026)
     mode = Column(String, default="groups")  # 'groups' oder 'cl'
     has_return_matches = Column(Boolean, default=False)
     advance_count = Column(Integer, default=2)
@@ -50,3 +51,14 @@ class Match(Base):
     tournament = relationship("Tournament", back_populates="matches")
     home_team = relationship("Team", foreign_keys=[home_team_id])
     away_team = relationship("Team", foreign_keys=[away_team_id])
+
+class PastTournament(Base):
+    __tablename__ = "past_tournaments"
+
+    id = Column(Integer, primary_key=True, index=True)
+    tournament_name = Column(String)
+    year = Column(Integer)
+    winner_name = Column(String)
+    runner_up_name = Column(String)
+    top_scorer_name = Column(String)
+    top_scorer_goals = Column(Integer)

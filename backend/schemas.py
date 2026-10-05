@@ -7,6 +7,9 @@ class TournamentStartConfig(BaseModel):
     advance_per_group: int = 2
     cl_matches_per_team: int = 4
     cl_advance_count: int = 4
+    name: str = "Tournament Pro"
+    year: int = 2026
+
 
 class TeamCreate(BaseModel):
     name: str
