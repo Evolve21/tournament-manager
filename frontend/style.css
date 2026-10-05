@@ -548,7 +548,11 @@ tr.qualify {
    MOBILE & SMARTPHONE OPTIMIERUNG
    ========================================== */
 @media (max-width: 768px) {
-  /* 1. Grundlayout & Abstände kompakter machen */
+  /* 1. Striktes Box-Modell für alle Elemente erzwingen */
+  *, *::before, *::after {
+    box-sizing: border-box !important;
+  }
+
   body, html {
     overflow-x: hidden;
   }
@@ -559,121 +563,138 @@ tr.qualify {
   }
 
   .panel {
-    padding: 16px 12px !important;
-    margin-bottom: 16px !important;
+    padding: 16px 14px !important;
+    margin-bottom: 18px !important;
+    width: 100% !important;
+    overflow: hidden; /* Verhindert das Überstehen von Tabellen & Inputs */
   }
 
-  /* 2. Obere Navbar sauber untereinander stapeln */
+  /* Ausnahme für Spieltage/Begegnungen: 3D-Effekt beibehalten */
+  #matchesCard,
+  #tournamentSection .panel:has(#matchesContainer) {
+    overflow: visible !important;
+  }
+
+  /* 2. Obere Navbar: Mehr Luft zwischen "TOURNAMENT ENGINE" und den Buttons */
   .navbar {
     flex-direction: column !important;
-    align-items: flex-start !important;
-    gap: 12px !important;
-    padding: 14px 12px !important;
+    align-items: stretch !important;
+    gap: 18px !important; /* Deutlicher Abstand zwischen Titel und Buttons */
+    padding: 16px 14px !important;
   }
 
   .nav-actions {
     width: 100% !important;
     display: flex !important;
     flex-wrap: wrap !important;
-    gap: 8px !important;
+    gap: 10px !important;
+    margin-top: 4px !important;
   }
 
   .nav-actions .btn {
-    flex: 1 1 calc(50% - 8px) !important;
+    flex: 1 1 calc(50% - 10px) !important;
+    max-width: 100% !important;
     text-align: center !important;
     justify-content: center !important;
     font-size: 0.8rem !important;
     padding: 10px 8px !important;
+    margin: 0 !important;
   }
 
-  /* 3. Panel-Kopfzeilen & Buttons innerhalb der Boxen halten */
+  /* 3. Panel-Kopfzeilen (inkl. K.-o.-Turnierbaum): Mehr Abstand zwischen Titel & Button */
   .panel-head,
   .flex-between {
+    display: flex !important;
     flex-direction: column !important;
     align-items: stretch !important;
-    gap: 10px !important;
+    gap: 14px !important; /* Sorgt für sauberen Abstand beim K.-o.-Baum & Setup */
+    margin-bottom: 16px !important;
   }
 
+  .panel-head h2 {
+    margin-bottom: 2px !important;
+  }
+
+  /* Alle Buttons (inkl. "Demo-Teams hinzufügen" & "Turnier abschließen") in der Box halten */
+  .panel .btn,
   .panel-head .btn,
   #btnTriggerKO {
     width: 100% !important;
+    max-width: 100% !important;
     text-align: center !important;
     justify-content: center !important;
-  }
-
-  /* 4. Setup-Felder & Team-Eingabe untereinander statt nebeneinander */
-  .grid-config,
-  .add-team-row,
-  .input-group {
-    grid-template-columns: 1fr !important;
-    flex-direction: column !important;
-    gap: 10px !important;
-    width: 100% !important;
-  }
-
-  .add-team-row input,
-  .add-team-row .btn,
-  input[type="text"],
-  input[type="number"],
-  select {
-    width: 100% !important;
-    box-sizing: border-box !important;
-  }
-
-  /* 5. Tabellen auf Handys scrollbar machen & Schrift anpassen */
-  #standingsContainer,
-  #pastTournamentsContainer {
-    overflow-x: auto !important;
-    -webkit-overflow-scrolling: touch;
-    width: 100% !important;
-  }
-
-  table {
-    font-size: 0.78rem !important;
-    min-width: 100% !important;
-  }
-
-  th, td {
-    padding: 8px 6px !important;
-    white-space: nowrap;
-  }
-
-  /* 6. Spielplan & Match-Karten perfekt zentrieren */
-  .matches-grid {
-    grid-template-columns: 1fr !important;
-  }
-
-  .match-card {
-    flex-direction: column !important;
-    align-items: center !important;
-    text-align: center !important;
-    gap: 8px !important;
-    padding: 12px 10px !important;
-  }
-
-  .match-card .team-name {
-    width: 100% !important;
-    text-align: center !important;
-    font-size: 0.9rem !important;
+    margin-left: 0 !important;
+    margin-right: 0 !important;
     white-space: normal !important;
   }
 
-  .score-box {
-    justify-content: center !important;
-    margin: 4px 0 !important;
+  /* 4. Setup-Felder & "Austragungsjahr" strikt in der Box halten */
+  .grid-config,
+  .add-team-row,
+  .input-group {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 12px !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
-  /* 7. K.-o.-Turnierbaum horizontal wischbar machen */
+  .grid-config label {
+    display: flex !important;
+    flex-direction: column !important;
+    width: 100% !important;
+    max-width: 100% !important;
+    gap: 6px !important;
+  }
+
+  input[type="text"],
+  input[type="number"],
+  select,
+  #tourneyYearInput,
+  #tourneyNameInput,
+  #newTeamName {
+    width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important; /* Verhindert das Überragen von Number-Inputs auf iOS/Android */
+    margin: 0 !important;
+  }
+
+  /* 5. Gruppentabellen sauber innerhalb der Hintergrund-Box halten */
+  #standingsContainer,
+  #pastTournamentsContainer,
+  .group-block,
+  .table-wrapper {
+    width: 100% !important;
+    max-width: 100% !important;
+    overflow-x: auto !important;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  table {
+    width: 100% !important;
+    max-width: 100% !important;
+    font-size: 0.76rem !important;
+    border-collapse: collapse !important;
+  }
+
+  th, td {
+    padding: 7px 4px !important;
+    white-space: nowrap;
+  }
+
+  /* 6. K.-o.-Turnierbaum sauber einpassen */
   .bracket-container,
   #koBracket {
     display: flex !important;
     flex-direction: column !important;
     gap: 16px !important;
-    overflow-x: hidden !important;
+    width: 100% !important;
+    max-width: 100% !important;
   }
 
   .bracket-column {
     width: 100% !important;
-    min-width: 100% !important;
+    max-width: 100% !important;
+    min-width: 0 !important;
   }
 }
