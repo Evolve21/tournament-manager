@@ -7,7 +7,6 @@ let currentTeams = [];
 let allMatches = [];
 const ADMIN_STORAGE_KEY = "tournament_admin_key";
 const DEFAULT_ADMIN_KEY = "turnier-admin";
-let lastBlockedPointerControl = null;
 
 function getAdminKey() {
   return localStorage.getItem(ADMIN_STORAGE_KEY) || "";
@@ -92,28 +91,12 @@ document.addEventListener("keydown", (event) => {
   }
 });
 
-document.addEventListener("pointerdown", (event) => {
-  const control = event.target.closest("[data-admin-only]");
-  if (!control || isAdminMode()) return;
-  event.preventDefault();
-  event.stopPropagation();
-  lastBlockedPointerControl = control;
-  window.setTimeout(() => {
-    if (lastBlockedPointerControl === control) lastBlockedPointerControl = null;
-  }, 1000);
-  alert("Nur im Admin-Modus möglich.");
-}, true);
-
 document.addEventListener("click", (event) => {
   const control = event.target.closest("[data-admin-only]");
   if (!control || isAdminMode()) return;
   event.preventDefault();
   event.stopPropagation();
-  if (lastBlockedPointerControl === control) {
-    lastBlockedPointerControl = null;
-  } else {
-    alert("Nur im Admin-Modus möglich.");
-  }
+  alert("Nur im Admin-Modus möglich.");
 }, true);
 
 document.addEventListener("keydown", (event) => {
