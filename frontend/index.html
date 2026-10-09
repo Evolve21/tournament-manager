@@ -16,9 +16,21 @@
     <div class="nav-actions">
       <button class="btn btn-secondary" id="adminModeButton" onclick="toggleAdminMode()">Admin-Modus: AUS</button>
       <button class="btn btn-secondary" onclick="window.print()">Export PDF</button>
-      <button class="btn btn-danger" onclick="resetTournament()">Reset</button>
+      <button class="btn btn-danger" data-admin-only onclick="resetTournament()">Reset</button>
     </div>
   </header>
+
+  <div id="adminLoginOverlay" class="admin-login-overlay hidden" role="dialog" aria-modal="true" aria-labelledby="adminLoginTitle" aria-hidden="true">
+    <form id="adminLoginForm" class="admin-login-panel">
+      <h2 id="adminLoginTitle">Admin-Modus aktivieren</h2>
+      <label for="adminPasswordInput">Admin-Passwort</label>
+      <input type="password" id="adminPasswordInput" autocomplete="current-password" required>
+      <div class="admin-login-actions">
+        <button type="button" class="btn btn-secondary" id="cancelAdminLogin">Abbrechen</button>
+        <button type="submit" class="btn btn-primary">Anmelden</button>
+      </div>
+    </form>
+  </div>
 
   <main class="container">
 
@@ -31,28 +43,28 @@
       <div class="grid-config">
             <label>
               <span>Turniername</span>
-              <input type="text" id="tourneyNameInput" value="Bahce Cup" placeholder="z.B. Sommer Cup">
+              <input type="text" id="tourneyNameInput" data-admin-only value="Bahce Cup" placeholder="z.B. Sommer Cup">
             </label>
             <label>
               <span>Austragungsjahr</span>
-              <input type="number" id="tourneyYearInput" value="2026">
+              <input type="number" id="tourneyYearInput" data-admin-only value="2026">
             </label>
           </div>
 
 
       <div class="mode-toggle">
-        <button class="mode-btn active" id="btnModeGroups" onclick="setMode('groups')">
+        <button class="mode-btn active" id="btnModeGroups" data-admin-only onclick="setMode('groups')">
           Klassische Gruppenphase
         </button>
-        <button class="mode-btn" id="btnModeCL" onclick="setMode('cl')">
+        <button class="mode-btn" id="btnModeCL" data-admin-only onclick="setMode('cl')">
           Champions-League-Modus (Swiss/Liga)
         </button>
       </div>
 
       <div class="input-group">
-        <input type="text" id="newTeamName" placeholder="Team-Name eingeben..." autocomplete="off">
-        <button class="btn btn-primary" onclick="addTeam()">Hinzufügen</button>
-        <button class="btn btn-secondary" onclick="loadDemoTeams()">Demo-Teams (8)</button>
+        <input type="text" id="newTeamName" data-admin-only placeholder="Team-Name eingeben..." autocomplete="off">
+        <button class="btn btn-primary" data-admin-only onclick="addTeam()">Hinzufügen</button>
+        <button class="btn btn-secondary" data-admin-only onclick="loadDemoTeams()">Demo-Teams (8)</button>
       </div>
 
       <div class="team-container" id="teamList"></div>
@@ -61,14 +73,15 @@
       <div id="groupsConfig" class="grid-config">
         <label>
           <span>Teams pro Gruppe</span>
-          <select id="groupSizeSelect" onchange="validateStart()">
+          <select id="groupSizeSelect" data-admin-only onchange="validateStart()">
             <option value="4" selected>4 Teams</option>
             <option value="3">3 Teams</option>
+            <option value="5">5 Teams</option>
           </select>
         </label>
         <label>
           <span>Weiterkommende pro Gruppe</span>
-          <select id="advanceGroupSelect" onchange="validateStart()">
+          <select id="advanceGroupSelect" data-admin-only onchange="validateStart()">
             <option value="2" selected>Top 2 (K.-o.-Runde)</option>
             <option value="1">Nur Platz 1</option>
           </select>
@@ -79,11 +92,11 @@
       <div id="clConfig" class="grid-config hidden">
         <label>
           <span>Spiele pro Team</span>
-          <input type="number" id="clMatchesInput" value="4" min="2" max="10" onchange="validateStart()">
+          <input type="number" id="clMatchesInput" data-admin-only value="4" min="2" max="10" onchange="validateStart()">
         </label>
         <label>
           <span>Weiterkommende in K.-o.-Baum (2er-Potenz)</span>
-          <select id="clAdvanceSelect" onchange="validateStart()">
+          <select id="clAdvanceSelect" data-admin-only onchange="validateStart()">
             <option value="4" selected>Top 4 (Halbfinale)</option>
             <option value="8">Top 8 (Viertelfinale)</option>
             <option value="2">Top 2 (Direktes Finale)</option>
@@ -94,7 +107,7 @@
       <div id="validationMsg" class="alert hidden"></div>
 
       <div class="panel-foot">
-        <button class="btn btn-primary btn-large" id="startBtn" onclick="startTournament()">
+        <button class="btn btn-primary btn-large" id="startBtn" data-admin-only onclick="startTournament()">
           Turnier starten ➔
         </button>
       </div>
@@ -106,7 +119,7 @@
       <div class="panel">
         <div class="panel-head flex-between">
           <h2>Aktuelle Tabellen</h2>
-          <button class="btn btn-primary" id="btnTriggerKO" onclick="triggerKnockout()">
+          <button class="btn btn-primary" id="btnTriggerKO" data-admin-only onclick="triggerKnockout()">
             K.-o.-Baum generieren ➔
           </button>
         </div>
@@ -123,7 +136,7 @@
       <div class="panel" id="koCard">
                 <div class="panel-head flex-between">
           <h2>K.-o.-Turnierbaum</h2>
-          <button class="btn btn-primary" onclick="archiveTournament()">
+          <button class="btn btn-primary" data-admin-only onclick="archiveTournament()">
             Turnier abschließen & archivieren ★
           </button>
         </div>

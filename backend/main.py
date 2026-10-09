@@ -124,8 +124,8 @@ def start_tournament(request: Request, config: schemas.TournamentStartConfig, db
     if config.mode == "groups":
         group_mapping = logic.split_into_groups(team_ids, config.target_group_size)
         total_qualifiers = len(group_mapping) * config.advance_per_group
-        if not logic.is_power_of_two(total_qualifiers):
-            raise HTTPException(status_code=400, detail=f"Gesamtzahl Qualifikanten ({total_qualifiers}) muss eine 2er-Potenz sein (2, 4, 8)!")
+        if total_qualifiers < 2 or not logic.is_power_of_two(total_qualifiers):
+            raise HTTPException(status_code=400, detail=f"Gesamtzahl Qualifikanten ({total_qualifiers}) muss mindestens 2 und eine 2er-Potenz sein (z. B. 2, 4, 8, 16)!")
 
         t.advance_count = config.advance_per_group
         for g_name, members in group_mapping.items():
@@ -134,8 +134,8 @@ def start_tournament(request: Request, config: schemas.TournamentStartConfig, db
                 if tm: tm.group_name = g_name
             all_matches.extend(logic.generate_round_robin_matches(members, t.has_return_matches))
     else:
-        if not logic.is_power_of_two(config.cl_advance_count):
-            raise HTTPException(status_code=400, detail="Qualifikanten-Anzahl muss eine 2er-Potenz sein (2, 4, 8)!")
+        if config.cl_advance_count < 2 or not logic.is_power_of_two(config.cl_advance_count):
+            raise HTTPException(status_code=400, detail="Qualifikanten-Anzahl muss mindestens 2 und eine 2er-Potenz sein (z. B. 2, 4, 8, 16)!")
         t.advance_count = config.cl_advance_count
         for tm in teams:
             tm.group_name = "Liga"

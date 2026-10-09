@@ -25,9 +25,12 @@ function updateAdminModeUI() {
   button.classList.toggle("btn-primary", active);
   button.classList.toggle("btn-secondary", !active);
 
-  const scoreInputs = document.querySelectorAll(".score-input");
-  scoreInputs.forEach((input) => {
-    input.disabled = !active;
+  document.querySelectorAll("[data-admin-only]").forEach((control) => {
+    control.classList.toggle("admin-locked", !active);
+    control.setAttribute("aria-disabled", String(!active));
+    if (control instanceof HTMLInputElement) {
+      control.readOnly = !active;
+    }
   });
 }
 
@@ -41,24 +44,76 @@ function toggleAdminMode() {
     return;
   }
 
-  const enteredKey = window.prompt("Admin-Code eingeben:", "");
-  if (enteredKey === null) return;
+  const overlay = document.getElementById("adminLoginOverlay");
+  const passwordInput = document.getElementById("adminPasswordInput");
+  overlay.classList.remove("hidden");
+  overlay.setAttribute("aria-hidden", "false");
+  passwordInput.value = "";
+  passwordInput.focus();
+}
 
-  const cleanedKey = enteredKey.trim();
+function closeAdminLogin() {
+  const overlay = document.getElementById("adminLoginOverlay");
+  overlay.classList.add("hidden");
+  overlay.setAttribute("aria-hidden", "true");
+  document.getElementById("adminModeButton").focus();
+}
+
+function submitAdminLogin(event) {
+  event.preventDefault();
+  const passwordInput = document.getElementById("adminPasswordInput");
+  const cleanedKey = passwordInput.value.trim();
   if (!cleanedKey) {
-    alert("Bitte einen Admin-Code eingeben.");
+    passwordInput.focus();
     return;
   }
 
   if (cleanedKey !== DEFAULT_ADMIN_KEY) {
     alert("Falscher Admin-Code.");
+    passwordInput.select();
     return;
   }
 
   localStorage.setItem(ADMIN_STORAGE_KEY, cleanedKey);
+  closeAdminLogin();
   updateAdminModeUI();
   alert("Admin-Modus aktiviert.");
 }
+
+document.getElementById("adminLoginForm").addEventListener("submit", submitAdminLogin);
+document.getElementById("cancelAdminLogin").addEventListener("click", closeAdminLogin);
+document.getElementById("adminLoginOverlay").addEventListener("click", (event) => {
+  if (event.target === event.currentTarget) closeAdminLogin();
+});
+document.addEventListener("keydown", (event) => {
+  if (event.key === "Escape" && !document.getElementById("adminLoginOverlay").classList.contains("hidden")) {
+    closeAdminLogin();
+  }
+});
+
+document.addEventListener("pointerdown", (event) => {
+  const control = event.target.closest("[data-admin-only]");
+  if (!control || isAdminMode()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  alert("Nur im Admin-Modus möglich.");
+}, true);
+
+document.addEventListener("click", (event) => {
+  const control = event.target.closest("[data-admin-only]");
+  if (!control || isAdminMode()) return;
+  event.preventDefault();
+  event.stopPropagation();
+  if (event.detail === 0) alert("Nur im Admin-Modus möglich.");
+}, true);
+
+document.addEventListener("keydown", (event) => {
+  const control = event.target.closest("[data-admin-only]");
+  if (!control || isAdminMode() || event.key === "Tab") return;
+  event.preventDefault();
+  event.stopPropagation();
+  alert("Nur im Admin-Modus möglich.");
+}, true);
 
 async function protectedFetch(url, options = {}, requireAdmin = false) {
   const headers = new Headers(options.headers || {});
@@ -132,10 +187,11 @@ async function loadTeams() {
   currentTeams.forEach(tm => {
     const el = document.createElement("div");
     el.className = "team-item";
-    el.innerHTML = `<span>${tm.name}</span><button onclick="deleteTeam(${tm.id})">×</button>`;
+    el.innerHTML = `<span>${tm.name}</span><button data-admin-only aria-label="Team ${tm.name} löschen" onclick="deleteTeam(${tm.id})">×</button>`;
     list.appendChild(el);
   });
   
+  updateAdminModeUI();
   validateStart();
 }
 
@@ -152,13 +208,23 @@ function validateStart() {
   } else if (currentMode === "groups") {
     const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
     const advance = parseInt(document.getElementById("advanceGroupSelect").value);
-    const numGroups = Math.max(1, Math.round(n / groupSize));
+    const exactGroupCount = n / groupSize;
+    const lowerGroupCount = Math.floor(exactGroupCount);
+    const fraction = exactGroupCount - lowerGroupCount;
+    const roundedGroupCount = fraction < 0.5
+      ? lowerGroupCount
+      : fraction > 0.5
+        ? lowerGroupCount + 1
+        : lowerGroupCount % 2 === 0
+          ? lowerGroupCount
+          : lowerGroupCount + 1;
+    const numGroups = Math.max(1, roundedGroupCount);
     const totalQualifiers = numGroups * advance;
 
     const isPowerOfTwo = (totalQualifiers & (totalQualifiers - 1)) === 0 && totalQualifiers >= 2;
     if (!isPowerOfTwo) {
       valid = false;
-      text = `Mit ${numGroups} Gruppen à ${advance} Weiterkommenden gäbe es ${totalQualifiers} Teams. Ein K.-o.-Baum benötigt 2, 4, 8 oder 16 Teams!`;
+      text = `Mit ${numGroups} Gruppen à ${advance} Weiterkommenden gäbe es ${totalQualifiers} Teams. Ein K.-o.-Baum benötigt eine 2er-Potenz (2, 4, 8 oder 16 Teams)!`;
     }
   } else if (currentMode === "cl") {
     const advance = parseInt(document.getElementById("clAdvanceSelect").value);
@@ -405,9 +471,9 @@ function createMatchCard(m, isKO = false) {
       <div class="penalty-row">
         <span>Elfmeter:</span>
         <div class="score-box">
-          <input type="number" class="score-input" data-match-id="${m.id}" data-field="home_penalty" value="${hp}">
+          <input type="number" class="score-input" data-admin-only data-match-id="${m.id}" data-field="home_penalty" value="${hp}">
           <span>:</span>
-          <input type="number" class="score-input" data-match-id="${m.id}" data-field="away_penalty" value="${ap}">
+          <input type="number" class="score-input" data-admin-only data-match-id="${m.id}" data-field="away_penalty" value="${ap}">
         </div>
       </div>
     `;
@@ -417,9 +483,9 @@ function createMatchCard(m, isKO = false) {
     <div class="match-row">
       <span class="team-title">${m.home_team_name}</span>
       <div class="score-box">
-        <input type="number" min="0" class="score-input" data-match-id="${m.id}" data-field="home_score" value="${hVal}">
+        <input type="number" min="0" class="score-input" data-admin-only data-match-id="${m.id}" data-field="home_score" value="${hVal}">
         <span>:</span>
-        <input type="number" min="0" class="score-input" data-match-id="${m.id}" data-field="away_score" value="${aVal}">
+        <input type="number" min="0" class="score-input" data-admin-only data-match-id="${m.id}" data-field="away_score" value="${aVal}">
       </div>
       <span class="team-title away">${m.away_team_name}</span>
     </div>
