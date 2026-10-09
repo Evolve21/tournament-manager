@@ -1,7 +1,9 @@
+import os
 import random
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, Depends, HTTPException
+from fastapi import FastAPI, Depends, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from sqlalchemy import or_
 from sqlalchemy.orm import Session
 from typing import List
 
@@ -13,6 +15,7 @@ import tournament_logic as logic
 Base.metadata.create_all(bind=engine)
 
 app = FastAPI(title="Tournament Manager Pro")
+ADMIN_KEY = os.getenv("ADMIN_KEY", "turnier-admin")
 
 app.add_middleware(
     CORSMiddleware,
@@ -21,6 +24,13 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+def require_admin(request: Request):
+    incoming_key = request.headers.get("X-Admin-Key")
+    if incoming_key != ADMIN_KEY:
+        raise HTTPException(status_code=403, detail="Admin-Modus erforderlich.")
+    return True
 
 def get_default_tournament(db: Session) -> models.Tournament:
     t = db.query(models.Tournament).first()
@@ -44,7 +54,8 @@ def get_tournament_info(db: Session = Depends(get_db)):
     }
 
 @app.post("/tournament/reset")
-def reset_tournament(db: Session = Depends(get_db)):
+def reset_tournament(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     db.query(models.Match).filter(models.Match.tournament_id == t.id).delete()
     db.query(models.Team).filter(models.Team.tournament_id == t.id).delete()
@@ -59,7 +70,8 @@ def get_teams(db: Session = Depends(get_db)):
     return db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
 
 @app.post("/teams", response_model=schemas.TeamResponse)
-def add_team(team_in: schemas.TeamCreate, db: Session = Depends(get_db)):
+def add_team(request: Request, team_in: schemas.TeamCreate, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     if t.status != "setup":
         raise HTTPException(status_code=400, detail="Turnier läuft bereits.")
@@ -70,7 +82,8 @@ def add_team(team_in: schemas.TeamCreate, db: Session = Depends(get_db)):
     return new_team
 
 @app.delete("/teams/{team_id}")
-def delete_team(team_id: int, db: Session = Depends(get_db)):
+def delete_team(request: Request, team_id: int, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     team = db.query(models.Team).filter(models.Team.id == team_id, models.Team.tournament_id == t.id).first()
     if team:
@@ -79,7 +92,8 @@ def delete_team(team_id: int, db: Session = Depends(get_db)):
     return {"message": "Gelöscht"}
 
 @app.post("/teams/demo")
-def load_demo_teams(db: Session = Depends(get_db)):
+def load_demo_teams(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     db.query(models.Team).filter(models.Team.tournament_id == t.id).delete()
     demo_names = [
@@ -92,7 +106,8 @@ def load_demo_teams(db: Session = Depends(get_db)):
     return {"message": "Demo-Teams geladen."}
 
 @app.post("/tournament/start")
-def start_tournament(config: schemas.TournamentStartConfig, db: Session = Depends(get_db)):
+def start_tournament(request: Request, config: schemas.TournamentStartConfig, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
     if len(teams) < 2:
@@ -140,11 +155,20 @@ def start_tournament(config: schemas.TournamentStartConfig, db: Session = Depend
     return {"message": "Gestartet"}
 
 @app.post("/tournament/start-knockout")
-def start_knockout(db: Session = Depends(get_db)):
+def start_knockout(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     existing_ko = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "knockout").first()
     if existing_ko:
         raise HTTPException(status_code=400, detail="K.-o.-Baum existiert bereits.")
+
+    incomplete_match = db.query(models.Match).filter(
+        models.Match.tournament_id == t.id,
+        models.Match.stage == "group",
+        or_(models.Match.home_score.is_(None), models.Match.away_score.is_(None))
+    ).first()
+    if incomplete_match:
+        raise HTTPException(status_code=400, detail="Alle Gruppenspiele müssen beendet sein, bevor der K.-o.-Baum generiert werden kann.")
 
     teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
     group_matches = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "group").all()
@@ -243,7 +267,8 @@ def get_matches(db: Session = Depends(get_db)):
     } for m in matches]
 
 @app.put("/matches/{match_id}/score")
-def update_score(match_id: int, score_data: schemas.MatchUpdateScore, db: Session = Depends(get_db)):
+def update_score(request: Request, match_id: int, score_data: schemas.MatchUpdateScore, db: Session = Depends(get_db)):
+    require_admin(request)
     m = db.query(models.Match).get(match_id)
     if not m:
         raise HTTPException(status_code=404, detail="Match nicht gefunden.")
@@ -300,7 +325,8 @@ def get_past_tournaments(db: Session = Depends(get_db)):
     return db.query(models.PastTournament).order_by(models.PastTournament.id.desc()).all()
 
 @app.post("/tournament/archive")
-def archive_tournament(db: Session = Depends(get_db)):
+def archive_tournament(request: Request, db: Session = Depends(get_db)):
+    require_admin(request)
     t = get_default_tournament(db)
     final = db.query(models.Match).filter_by(tournament_id=t.id, stage="knockout", round_number=1).first()
     if not final or final.home_score is None or final.away_score is None:

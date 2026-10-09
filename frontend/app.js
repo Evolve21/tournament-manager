@@ -5,6 +5,78 @@ let tournamentInfo = null;
 let currentMode = "groups";
 let currentTeams = [];
 let allMatches = [];
+const ADMIN_STORAGE_KEY = "tournament_admin_key";
+const DEFAULT_ADMIN_KEY = "turnier-admin";
+
+function getAdminKey() {
+  return localStorage.getItem(ADMIN_STORAGE_KEY) || "";
+}
+
+function isAdminMode() {
+  return Boolean(getAdminKey());
+}
+
+function updateAdminModeUI() {
+  const button = document.getElementById("adminModeButton");
+  if (!button) return;
+
+  const active = isAdminMode();
+  button.textContent = active ? "Admin-Modus: AN" : "Admin-Modus: AUS";
+  button.classList.toggle("btn-primary", active);
+  button.classList.toggle("btn-secondary", !active);
+
+  const scoreInputs = document.querySelectorAll(".score-input");
+  scoreInputs.forEach((input) => {
+    input.disabled = !active;
+  });
+}
+
+function toggleAdminMode() {
+  const existingKey = getAdminKey();
+  if (existingKey) {
+    const confirmDisable = confirm("Admin-Modus wirklich deaktivieren?");
+    if (!confirmDisable) return;
+    localStorage.removeItem(ADMIN_STORAGE_KEY);
+    updateAdminModeUI();
+    return;
+  }
+
+  const enteredKey = window.prompt("Admin-Code eingeben:", "");
+  if (enteredKey === null) return;
+
+  const cleanedKey = enteredKey.trim();
+  if (!cleanedKey) {
+    alert("Bitte einen Admin-Code eingeben.");
+    return;
+  }
+
+  if (cleanedKey !== DEFAULT_ADMIN_KEY) {
+    alert("Falscher Admin-Code.");
+    return;
+  }
+
+  localStorage.setItem(ADMIN_STORAGE_KEY, cleanedKey);
+  updateAdminModeUI();
+  alert("Admin-Modus aktiviert.");
+}
+
+async function protectedFetch(url, options = {}, requireAdmin = false) {
+  const headers = new Headers(options.headers || {});
+
+  if (requireAdmin) {
+    const key = getAdminKey();
+    if (!key) {
+      alert("Nur im Admin-Modus erlaubt.");
+      throw new Error("Admin required");
+    }
+    headers.set("X-Admin-Key", key);
+  }
+
+  return fetch(url, {
+    ...options,
+    headers
+  });
+}
 
 // ==========================================
 // 1. INITIALISIERUNG
@@ -43,10 +115,11 @@ async function init() {
 // ==========================================
 function setMode(mode) {
   currentMode = mode;
-  document.getElementById("btnModeGroups").classList.toggle("active", mode === "groups");
-  document.getElementById("btnModeCL").classList.toggle("active", mode === "cl");
-  document.getElementById("groupsConfig").classList.toggle("hidden", mode !== "groups");
-  document.getElementById("clConfig").classList.toggle("hidden", mode !== "cl");
+  const isGroups = mode === "groups";
+  document.getElementById("btnModeGroups").classList.toggle("active", isGroups);
+  document.getElementById("btnModeCL").classList.toggle("active", !isGroups);
+  document.getElementById("groupsConfig").classList.toggle("hidden", !isGroups);
+  document.getElementById("clConfig").classList.toggle("hidden", isGroups);
   validateStart();
 }
 
@@ -105,24 +178,37 @@ function validateStart() {
 }
 
 async function addTeam() {
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+
   const input = document.getElementById("newTeamName");
   if (!input.value.trim()) return;
-  await fetch(`${API_URL}/teams`, {
+  await protectedFetch(`${API_URL}/teams`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ name: input.value.trim() })
-  });
+  }, true);
   input.value = "";
   await loadTeams();
 }
 
 async function deleteTeam(id) {
-  await fetch(`${API_URL}/teams/${id}`, { method: "DELETE" });
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+  await protectedFetch(`${API_URL}/teams/${id}`, { method: "DELETE" }, true);
   await loadTeams();
 }
 
 async function loadDemoTeams() {
-  await fetch(`${API_URL}/teams/demo`, { method: "POST" });
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+  await protectedFetch(`${API_URL}/teams/demo`, { method: "POST" }, true);
   await loadTeams();
 }
 
@@ -130,12 +216,17 @@ async function loadDemoTeams() {
 // 3. TURNIERSTART & STEUERUNG
 // ==========================================
 async function startTournament() {
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+
   const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
   const advance = parseInt(document.getElementById("advanceGroupSelect").value);
   const clMatches = parseInt(document.getElementById("clMatchesInput").value);
   const clAdvance = parseInt(document.getElementById("clAdvanceSelect").value);
 
-  const res = await fetch(`${API_URL}/tournament/start`, {
+  const res = await protectedFetch(`${API_URL}/tournament/start`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -146,23 +237,34 @@ async function startTournament() {
       cl_advance_count: clAdvance,
       name: document.getElementById("tourneyNameInput").value.trim() || "Tournament Pro",
       year: parseInt(document.getElementById("tourneyYearInput").value) || 2026,
-
     })
-  });
+  }, true);
   if (res.ok) init();
 }
 
 async function triggerKnockout() {
-  const res = await fetch(`${API_URL}/tournament/start-knockout`, { method: "POST" });
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+
+  const res = await protectedFetch(`${API_URL}/tournament/start-knockout`, { method: "POST" }, true);
   if (res.ok) {
     document.getElementById("btnTriggerKO").classList.add("hidden");
     init();
+  } else {
+    const err = await res.json().catch(() => ({}));
+    alert(err.detail || "Der K.-o.-Baum konnte nicht erzeugt werden.");
   }
 }
 
 async function resetTournament() {
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
   if (confirm("Turnier wirklich zurücksetzen? Alle Stände werden gelöscht.")) {
-    await fetch(`${API_URL}/tournament/reset`, { method: "POST" });
+    await protectedFetch(`${API_URL}/tournament/reset`, { method: "POST" }, true);
     init();
   }
 }
@@ -179,6 +281,7 @@ async function refreshData(renderAll = false) {
   }
   renderBracket();
   attachInputListeners();
+  updateAdminModeUI();
 }
 
 async function renderStandings() {
@@ -333,12 +436,20 @@ function attachInputListeners() {
 
   inputs.forEach((input, idx) => {
     input.onchange = async () => {
+      if (!isAdminMode()) {
+        alert("Nur im Admin-Modus möglich.");
+        return;
+      }
       await saveMatch(input.dataset.matchId);
     };
 
     input.onkeydown = async (e) => {
       if (e.key === "Enter") {
         e.preventDefault();
+        if (!isAdminMode()) {
+          alert("Nur im Admin-Modus möglich.");
+          return;
+        }
         await saveMatch(input.dataset.matchId);
         if (inputs[idx + 1]) {
           inputs[idx + 1].focus();
@@ -350,6 +461,11 @@ function attachInputListeners() {
 }
 
 async function saveMatch(matchId) {
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+
   const hInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="home_score"]`);
   const aInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="away_score"]`);
   const hpInput = document.querySelector(`input[data-match-id="${matchId}"][data-field="home_penalty"]`);
@@ -364,11 +480,11 @@ async function saveMatch(matchId) {
     away_penalty: apInput && apInput.value !== "" ? parseInt(apInput.value) : null
   };
 
-  await fetch(`${API_URL}/matches/${matchId}/score`, {
+  await protectedFetch(`${API_URL}/matches/${matchId}/score`, {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(payload)
-  });
+  }, true);
 
   await refreshData(false);
 }
@@ -422,10 +538,15 @@ async function loadPastTournaments() {
 }
 
 async function archiveTournament() {
+  if (!isAdminMode()) {
+    alert("Nur im Admin-Modus möglich.");
+    return;
+  }
+
   if (!confirm("Turnier abschließen, Sieger in 'Past Tournaments' verewigen und neues Turnier vorbereiten?")) return;
-  const res = await fetch(`${API_URL}/tournament/archive`, { method: "POST" });
+  const res = await protectedFetch(`${API_URL}/tournament/archive`, { method: "POST" }, true);
   if (!res.ok) {
-    const err = await res.json();
+    const err = await res.json().catch(() => ({}));
     alert(err.detail || "Bitte erst das Finale vollständig eintragen!");
     return;
   }
@@ -433,4 +554,14 @@ async function archiveTournament() {
 }
 
 
+function syncModeButtonState() {
+  const isGroups = currentMode === "groups";
+  document.getElementById("btnModeGroups").classList.toggle("active", isGroups);
+  document.getElementById("btnModeCL").classList.toggle("active", !isGroups);
+  document.getElementById("groupsConfig").classList.toggle("hidden", !isGroups);
+  document.getElementById("clConfig").classList.toggle("hidden", isGroups);
+}
+
 init();
+syncModeButtonState();
+updateAdminModeUI();
