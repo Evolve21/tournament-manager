@@ -1199,6 +1199,28 @@ tr.qualify {
     margin: 0 !important;
   }
 
+  body:not(.is-scrolled) .navbar {
+    flex-wrap: wrap;
+  }
+
+  body:not(.is-scrolled) .brand {
+    width: 100%;
+  }
+
+  body:not(.is-scrolled) .nav-actions {
+    display: grid !important;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100% !important;
+    max-width: none;
+    margin-top: 4px !important;
+  }
+
+  body:not(.is-scrolled) .nav-actions .btn {
+    width: 100% !important;
+    min-width: 0;
+    flex: initial !important;
+  }
+
   .nav-actions .btn {
     flex: 0 0 auto !important;
     width: auto !important;
@@ -1208,8 +1230,8 @@ tr.qualify {
     white-space: nowrap !important;
   }
 
-  #adminModeButton,
-  .nav-actions .btn-danger {
+  body.is-scrolled #adminModeButton,
+  body.is-scrolled .nav-actions .btn-danger {
     display: none !important;
   }
 }

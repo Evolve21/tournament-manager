@@ -8,6 +8,13 @@ let allMatches = [];
 const ADMIN_STORAGE_KEY = "tournament_admin_key";
 const DEFAULT_ADMIN_KEY = "turnier-admin";
 
+function updateMobileNavState() {
+  document.body.classList.toggle("is-scrolled", window.scrollY > 40);
+}
+
+window.addEventListener("scroll", updateMobileNavState, { passive: true });
+updateMobileNavState();
+
 function getAdminKey() {
   return localStorage.getItem(ADMIN_STORAGE_KEY) || "";
 }
