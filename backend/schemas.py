@@ -6,6 +6,7 @@ class TournamentStartConfig(BaseModel):
     target_group_size: int = 4
     advance_per_group: int = 2
     cl_matches_per_team: int = 4
+    cl_round_robin: bool = False
     cl_advance_count: int = 4
     name: str = "Tournament Pro"
     year: int = 2026

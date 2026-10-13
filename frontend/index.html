@@ -3,17 +3,18 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Tournament Pro // Engine</title>
-  <link rel="stylesheet" href="style.css?v=20261009-2">
+  <title>Turniermanager</title>
+  <link rel="stylesheet" href="style.css?v=20261013-1">
 </head>
 <body>
 
   <header class="navbar">
     <div class="brand">
       <span class="brand-badge">PRO</span>
-      <span class="brand-text">TOURNAMENT ENGINE</span>
+      <span class="brand-text">TURNIERMANAGER</span>
     </div>
     <div class="nav-actions">
+      <button class="btn btn-secondary hidden" id="presentationModeButton" onclick="togglePresentationMode()">Beameransicht</button>
       <button class="btn btn-secondary" id="adminModeButton" onclick="toggleAdminMode()">Admin-Modus: AUS</button>
       <button class="btn btn-secondary" onclick="window.print()">Export PDF</button>
       <button class="btn btn-danger" data-admin-only onclick="resetTournament()">Reset</button>
@@ -53,12 +54,20 @@
 
 
       <div class="mode-toggle">
-        <button class="mode-btn active" id="btnModeGroups" data-admin-only onclick="setMode('groups')">
-          Klassische Gruppenphase
-        </button>
-        <button class="mode-btn" id="btnModeCL" data-admin-only onclick="setMode('cl')">
-          Champions-League-Modus (Swiss/Liga)
-        </button>
+        <div class="mode-option">
+          <button class="mode-btn active" id="btnModeGroups" data-admin-only onclick="setMode('groups')">
+            Klassische Gruppenphase
+          </button>
+          <button class="info-button" type="button" aria-label="Informationen zur klassischen Gruppenphase" aria-expanded="false" aria-controls="groupsModeInfo" onclick="toggleModeInfo('groupsModeInfo', this)">!</button>
+          <p class="mode-info hidden" id="groupsModeInfo">Die Teams werden auf mehrere Gruppen verteilt. Innerhalb jeder Gruppe spielt jedes Team gegen jedes andere. Die besten Teams jeder Gruppe ziehen in die K.-o.-Runde ein.</p>
+        </div>
+        <div class="mode-option">
+          <button class="mode-btn" id="btnModeCL" data-admin-only onclick="setMode('cl')">
+            Champions-League-Modus (Liga)
+          </button>
+          <button class="info-button" type="button" aria-label="Informationen zum Liga-Modus" aria-expanded="false" aria-controls="clModeInfo" onclick="toggleModeInfo('clModeInfo', this)">!</button>
+          <p class="mode-info hidden" id="clModeInfo">Alle Teams spielen in einer gemeinsamen Tabelle. Du kannst eine feste Anzahl Spiele pro Team festlegen oder „Jeder gegen jeden“ wählen. Die besten Teams erreichen anschließend die K.-o.-Runde.</p>
+        </div>
       </div>
 
       <div class="input-group">
@@ -92,7 +101,10 @@
       <div id="clConfig" class="grid-config hidden">
         <label>
           <span>Spiele pro Team</span>
-          <input type="number" id="clMatchesInput" data-admin-only value="4" min="2" max="10" onchange="validateStart()">
+          <select id="clMatchesInput" data-admin-only onchange="validateStart()">
+            <option value="4" selected>4 Spiele</option>
+            <option value="all">Jeder gegen jeden</option>
+          </select>
         </label>
         <label>
           <span>Weiterkommende in K.-o.-Baum (2er-Potenz)</span>
@@ -115,7 +127,18 @@
 
     <!-- 2. AKTIVES TURNIER -->
     <section id="tournamentSection" class="hidden">
-      
+      <section class="panel tournament-hero" id="tournamentHero" aria-labelledby="tournamentTitle">
+        <div class="hero-heading">
+          <div>
+            <span class="eyebrow" id="tournamentPhase">TURNIER LÄUFT</span>
+            <h1 id="tournamentTitle">Turnier</h1>
+            <p id="tournamentSubtitle"></p>
+          </div>
+          <span class="status-pill" id="tournamentStatus"></span>
+        </div>
+        <div class="tournament-stats" id="tournamentStats"></div>
+      </section>
+
       <div class="panel">
         <div class="panel-head flex-between">
           <h2>Aktuelle Tabellen</h2>
@@ -146,17 +169,39 @@
 
     </section>
 
-    <!-- 3. DAUERHAFTES ARCHIV (PAST TOURNAMENTS) -->
+    <section class="panel presentation-view hidden" id="presentationView" aria-live="polite" tabindex="-1">
+      <div class="presentation-heading">
+        <div>
+          <span class="eyebrow" id="presentationPhase"></span>
+          <h1 id="presentationTitle"></h1>
+        </div>
+        <button class="btn btn-secondary" onclick="togglePresentationMode()">Ansicht schließen</button>
+      </div>
+      <div class="tournament-stats" id="presentationStats"></div>
+      <div class="presentation-columns">
+        <div>
+          <h2>Aktuelle Tabelle</h2>
+          <div id="presentationStandings"></div>
+        </div>
+        <div>
+          <h2>Nächste Begegnungen</h2>
+          <div class="presentation-matches" id="presentationMatches"></div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 3. DAUERHAFTES ARCHIV -->
     <section class="panel">
       <div class="panel-head">
-        <h2>Past Tournaments // Hall of Fame</h2>
+        <h2>Hall of Fame</h2>
       </div>
       <div id="pastTournamentsContainer"></div>
     </section>
 
+    <p class="live-message hidden" id="liveMessage" role="status" aria-live="polite"></p>
 
   </main>
 
-  <script src="app.js?v=20261009-3"></script>
+  <script src="app.js?v=20261013-1"></script>
 </body>
 </html>

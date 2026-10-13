@@ -34,6 +34,33 @@ function updateAdminModeUI() {
   });
 }
 
+function toggleModeInfo(infoId, button) {
+  const info = document.getElementById(infoId);
+  const isExpanded = button.getAttribute("aria-expanded") === "true";
+  document.querySelectorAll(".mode-info").forEach((item) => item.classList.add("hidden"));
+  document.querySelectorAll(".info-button").forEach((item) => item.setAttribute("aria-expanded", "false"));
+  if (!isExpanded) {
+    info.classList.remove("hidden");
+    button.setAttribute("aria-expanded", "true");
+  }
+}
+
+function setLiveMessage(message, isError = false) {
+  const liveMessage = document.getElementById("liveMessage");
+  liveMessage.textContent = message;
+  liveMessage.classList.toggle("hidden", !message);
+  liveMessage.classList.toggle("is-error", isError);
+}
+
+function togglePresentationMode() {
+  const isActive = document.body.classList.toggle("presentation-mode");
+  document.getElementById("presentationView").classList.toggle("hidden", !isActive);
+  document.getElementById("presentationModeButton").textContent = isActive
+    ? "Beameransicht schließen"
+    : "Beameransicht";
+  if (isActive) document.getElementById("presentationView").focus();
+}
+
 function toggleAdminMode() {
   const existingKey = getAdminKey();
   if (existingKey) {
@@ -88,6 +115,12 @@ document.getElementById("adminLoginOverlay").addEventListener("click", (event) =
 document.addEventListener("keydown", (event) => {
   if (event.key === "Escape" && !document.getElementById("adminLoginOverlay").classList.contains("hidden")) {
     closeAdminLogin();
+    return;
+  }
+  if (event.key === "Escape") {
+    document.querySelectorAll(".mode-info").forEach((item) => item.classList.add("hidden"));
+    document.querySelectorAll(".info-button").forEach((item) => item.setAttribute("aria-expanded", "false"));
+    if (document.body.classList.contains("presentation-mode")) togglePresentationMode();
   }
 });
 
@@ -129,6 +162,7 @@ async function protectedFetch(url, options = {}, requireAdmin = false) {
 // 1. INITIALISIERUNG
 // ==========================================
 async function init() {
+  setLiveMessage("Turnierdaten werden geladen …");
   try {
     const res = await fetch(`${API_URL}/tournament`);
     tournamentInfo = await res.json();
@@ -136,10 +170,12 @@ async function init() {
     if (tournamentInfo.status === "setup") {
       document.getElementById("setupSection").classList.remove("hidden");
       document.getElementById("tournamentSection").classList.add("hidden");
+      document.getElementById("presentationModeButton").classList.add("hidden");
       await loadTeams();
     } else {
       document.getElementById("setupSection").classList.add("hidden");
       document.getElementById("tournamentSection").classList.remove("hidden");
+      document.getElementById("presentationModeButton").classList.remove("hidden");
       
       const koBtn = document.getElementById("btnTriggerKO");
       if (tournamentInfo.status === "knockout") {
@@ -151,9 +187,11 @@ async function init() {
       await refreshData(true);
     }
     await loadPastTournaments();
+    setLiveMessage("");
 
   } catch (err) {
     console.error("API-Verbindungsfehler:", err);
+    setLiveMessage("Turnierdaten konnten nicht geladen werden.", true);
   }
 }
 
@@ -170,9 +208,31 @@ function setMode(mode) {
   validateStart();
 }
 
+function updateMatchCountOptions() {
+  const select = document.getElementById("clMatchesInput");
+  const selectedValue = select.value || "4";
+  select.replaceChildren();
+
+  for (let count = 1; count < currentTeams.length; count += 1) {
+    const option = document.createElement("option");
+    option.value = String(count);
+    option.textContent = `${count} ${count === 1 ? "Spiel" : "Spiele"}`;
+    select.appendChild(option);
+  }
+
+  const allOption = document.createElement("option");
+  allOption.value = "all";
+  allOption.textContent = "Jeder gegen jeden";
+  select.appendChild(allOption);
+  select.value = selectedValue === "all" || Array.from(select.options).some((option) => option.value === selectedValue)
+    ? selectedValue
+    : String(Math.max(1, Math.min(4, currentTeams.length - 1)));
+}
+
 async function loadTeams() {
   const res = await fetch(`${API_URL}/teams`);
   currentTeams = await res.json();
+  updateMatchCountOptions();
   const list = document.getElementById("teamList");
   list.innerHTML = "";
   
@@ -282,6 +342,7 @@ async function startTournament() {
   const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
   const advance = parseInt(document.getElementById("advanceGroupSelect").value);
   const clMatches = parseInt(document.getElementById("clMatchesInput").value);
+  const clRoundRobin = document.getElementById("clMatchesInput").value === "all";
   const clAdvance = parseInt(document.getElementById("clAdvanceSelect").value);
 
   const res = await protectedFetch(`${API_URL}/tournament/start`, {
@@ -291,7 +352,8 @@ async function startTournament() {
       mode: currentMode,
       target_group_size: groupSize,
       advance_per_group: advance,
-      cl_matches_per_team: clMatches,
+      cl_matches_per_team: Number.isNaN(clMatches) ? Math.max(1, currentTeams.length - 1) : clMatches,
+      cl_round_robin: clRoundRobin,
       cl_advance_count: clAdvance,
       name: document.getElementById("tourneyNameInput").value.trim() || "Tournament Pro",
       year: parseInt(document.getElementById("tourneyYearInput").value) || 2026,
@@ -333,6 +395,8 @@ async function resetTournament() {
 async function refreshData(renderAll = false) {
   const mRes = await fetch(`${API_URL}/matches`);
   allMatches = await mRes.json();
+  const tRes = await fetch(`${API_URL}/teams`);
+  currentTeams = await tRes.json();
   await renderStandings();
   if (renderAll) {
     renderRounds();
@@ -340,6 +404,97 @@ async function refreshData(renderAll = false) {
   renderBracket();
   attachInputListeners();
   updateAdminModeUI();
+  renderTournamentOverview();
+}
+
+function renderTournamentOverview() {
+  if (!tournamentInfo || tournamentInfo.status === "setup") return;
+
+  const phase = tournamentInfo.status === "knockout"
+    ? "K.-o.-Runde"
+    : tournamentInfo.mode === "cl" ? "Liga" : "Gruppenphase";
+  const completedMatches = allMatches.filter((match) =>
+    match.home_team_id !== null && match.away_team_id !== null &&
+    match.home_score !== null && match.away_score !== null
+  ).length;
+  const playableMatches = allMatches.filter((match) =>
+    match.home_team_id !== null && match.away_team_id !== null
+  ).length;
+  const openMatches = playableMatches - completedMatches;
+
+  document.getElementById("tournamentTitle").textContent = tournamentInfo.name || "Turnier";
+  document.getElementById("tournamentSubtitle").textContent =
+    `${tournamentInfo.year || ""} · ${currentTeams.length} Teams · ${tournamentInfo.mode === "cl" ? "Liga-Modus" : "Gruppenmodus"}`;
+  document.getElementById("tournamentPhase").textContent = `TURNIERÜBERSICHT · ${phase.toUpperCase()}`;
+  document.getElementById("tournamentStatus").textContent = openMatches > 0
+    ? `${openMatches} ${openMatches === 1 ? "Spiel offen" : "Spiele offen"}`
+    : tournamentInfo.status === "knockout" ? "Turnier beendet" : "Vorrunde beendet";
+
+  const stats = [
+    ["Teams", currentTeams.length],
+    ["Gespielte Spiele", completedMatches],
+    ["Offene Spiele", openMatches],
+    ["Aktuelle Phase", phase]
+  ];
+  renderStats("tournamentStats", stats);
+  renderStats("presentationStats", stats);
+  document.getElementById("presentationTitle").textContent = tournamentInfo.name || "Turnier";
+  document.getElementById("presentationPhase").textContent =
+    `${tournamentInfo.year || ""} · ${phase.toUpperCase()}`;
+  renderPresentationMatches();
+}
+
+function renderStats(containerId, stats) {
+  const container = document.getElementById(containerId);
+  container.replaceChildren();
+  stats.forEach(([label, value]) => {
+    const card = document.createElement("div");
+    card.className = "stat-card";
+    const valueElement = document.createElement("strong");
+    valueElement.textContent = String(value);
+    const labelElement = document.createElement("span");
+    labelElement.textContent = label;
+    card.append(valueElement, labelElement);
+    container.appendChild(card);
+  });
+}
+
+function renderPresentationMatches() {
+  const container = document.getElementById("presentationMatches");
+  container.replaceChildren();
+  const currentStage = tournamentInfo && tournamentInfo.status === "knockout" ? "knockout" : "group";
+  const upcomingMatches = allMatches.filter((match) =>
+    match.stage === currentStage &&
+    match.home_team_id !== null && match.away_team_id !== null &&
+    (match.home_score === null || match.away_score === null)
+  ).sort((a, b) => {
+    if (a.stage !== b.stage) return a.stage === "knockout" ? -1 : 1;
+    return a.stage === "knockout"
+      ? b.round_number - a.round_number
+      : a.round_number - b.round_number;
+  }).slice(0, 5);
+
+  if (!upcomingMatches.length) {
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-state";
+    emptyState.textContent = "Aktuell stehen keine offenen Begegnungen an.";
+    container.appendChild(emptyState);
+    return;
+  }
+
+  upcomingMatches.forEach((match) => {
+    const card = document.createElement("article");
+    card.className = "presentation-match";
+    const round = document.createElement("span");
+    round.className = "eyebrow";
+    round.textContent = match.stage === "knockout"
+      ? "K.-o.-Runde"
+      : `Spieltag ${match.round_number}`;
+    const matchup = document.createElement("strong");
+    matchup.textContent = `${match.home_team_name}  –  ${match.away_team_name}`;
+    card.append(round, matchup);
+    container.appendChild(card);
+  });
 }
 
 async function renderStandings() {
@@ -354,7 +509,7 @@ async function renderStandings() {
     let html = `
       <div style="margin-bottom: 20px;">
         <span class="table-title">// ${groupName}</span>
-        <table>
+        <div class="table-scroll"><table>
           <thead>
             <tr>
               <th>#</th>
@@ -388,9 +543,10 @@ async function renderStandings() {
       `;
     });
 
-    html += `</tbody></table></div>`;
+    html += `</tbody>    </table></div></div>`;
     c.innerHTML += html;
   }
+  document.getElementById("presentationStandings").innerHTML = c.innerHTML;
 }
 
 function renderRounds() {
@@ -451,7 +607,8 @@ function renderBracket() {
 
 function createMatchCard(m, isKO = false) {
   const card = document.createElement("div");
-  card.className = "match-card";
+  const isComplete = m.home_score !== null && m.away_score !== null;
+  card.className = `match-card${isComplete ? " is-complete" : ""}`;
   const hVal = m.home_score !== null ? m.home_score : "";
   const aVal = m.away_score !== null ? m.away_score : "";
 
@@ -481,6 +638,7 @@ function createMatchCard(m, isKO = false) {
       </div>
       <span class="team-title away">${m.away_team_name}</span>
     </div>
+    <div class="match-status">${isComplete ? "Beendet" : "Ausstehend"}</div>
     ${penaltyHtml}
   `;
   return card;
@@ -538,13 +696,31 @@ async function saveMatch(matchId) {
     away_penalty: apInput && apInput.value !== "" ? parseInt(apInput.value) : null
   };
 
-  await protectedFetch(`${API_URL}/matches/${matchId}/score`, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload)
-  }, true);
+  setLiveMessage("Spielstand wird gespeichert …");
+  let response;
+  try {
+    response = await protectedFetch(`${API_URL}/matches/${matchId}/score`, {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload)
+    }, true);
+  } catch (error) {
+    console.error("Spielstand konnte nicht gespeichert werden:", error);
+    setLiveMessage("Spielstand nicht gespeichert. Bitte Verbindung prüfen.", true);
+    return;
+  }
+  if (!response.ok) {
+    setLiveMessage("Der Spielstand konnte nicht gespeichert werden.", true);
+    return;
+  }
 
+  const card = hInput.closest(".match-card");
+  if (card) {
+    card.classList.add("is-complete");
+    card.querySelector(".match-status").textContent = "Beendet";
+  }
   await refreshData(false);
+  setLiveMessage("Spielstand gespeichert.");
 }
 
 
@@ -562,37 +738,56 @@ async function loadPastTournaments() {
   const res = await fetch(`${API_URL}/past-tournaments`);
   const list = await res.json();
   const c = document.getElementById("pastTournamentsContainer");
+  c.replaceChildren();
   if (!list.length) {
-    c.innerHTML = `<p style="color:var(--text-muted); font-size:0.88rem;">Noch keine abgeschlossenen Turniere im Archiv.</p>`;
+    const emptyState = document.createElement("p");
+    emptyState.className = "empty-state";
+    emptyState.textContent = "Noch keine abgeschlossenen Turniere im Archiv. Hier erscheinen später alle Champions.";
+    c.appendChild(emptyState);
     return;
   }
 
-  let html = `
-    <table>
-      <thead>
-        <tr>
-          <th>Jahr</th>
-          <th>Turnier</th>
-          <th>Champion 🏆</th>
-          <th>Runner-Up</th>
-          <th>Top-Scorer (Tore)</th>
-        </tr>
-      </thead>
-      <tbody>
-  `;
-  list.forEach(item => {
-    html += `
-      <tr class="qualify">
-        <td><strong>${item.year}</strong></td>
-        <td>${item.tournament_name}</td>
-        <td><strong style="color:var(--green-light);">${item.winner_name}</strong></td>
-        <td>${item.runner_up_name}</td>
-        <td>${item.top_scorer_name} (${item.top_scorer_goals})</td>
-      </tr>
-    `;
+  const archiveGrid = document.createElement("div");
+  archiveGrid.className = "archive-grid";
+  list.forEach((item) => {
+    const card = document.createElement("article");
+    card.className = "archive-card";
+
+    const header = document.createElement("div");
+    header.className = "archive-card-header";
+    const year = document.createElement("span");
+    year.className = "archive-year";
+    year.textContent = String(item.year);
+    const name = document.createElement("h3");
+    name.textContent = item.tournament_name;
+    header.append(year, name);
+
+    const winner = document.createElement("div");
+    winner.className = "archive-winner";
+    const winnerLabel = document.createElement("span");
+    winnerLabel.className = "eyebrow";
+    winnerLabel.textContent = "CHAMPION";
+    const winnerName = document.createElement("strong");
+    winnerName.textContent = item.winner_name;
+    winner.append(winnerLabel, winnerName);
+
+    const details = document.createElement("div");
+    details.className = "archive-details";
+    const runnerUp = document.createElement("p");
+    runnerUp.innerHTML = "<span>Finalist</span>";
+    const runnerUpName = document.createElement("strong");
+    runnerUpName.textContent = item.runner_up_name;
+    runnerUp.appendChild(runnerUpName);
+    const scorer = document.createElement("p");
+    scorer.innerHTML = "<span>Top-Scorer</span>";
+    const scorerName = document.createElement("strong");
+    scorerName.textContent = `${item.top_scorer_name} · ${item.top_scorer_goals} Tore`;
+    scorer.appendChild(scorerName);
+    details.append(runnerUp, scorer);
+    card.append(header, winner, details);
+    archiveGrid.appendChild(card);
   });
-  html += `</tbody></table>`;
-  c.innerHTML = html;
+  c.appendChild(archiveGrid);
 }
 
 async function archiveTournament() {

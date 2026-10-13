@@ -47,6 +47,7 @@ def get_tournament_info(db: Session = Depends(get_db)):
     return {
         "id": t.id,
         "name": t.name,
+        "year": t.year,
         "mode": t.mode,
         "has_return_matches": t.has_return_matches,
         "advance_count": t.advance_count,
@@ -139,7 +140,11 @@ def start_tournament(request: Request, config: schemas.TournamentStartConfig, db
         t.advance_count = config.cl_advance_count
         for tm in teams:
             tm.group_name = "Liga"
-        all_matches = logic.generate_cl_matches(team_ids, config.cl_matches_per_team)
+        all_matches = (
+            logic.generate_round_robin_matches(team_ids)
+            if config.cl_round_robin
+            else logic.generate_cl_matches(team_ids, config.cl_matches_per_team)
+        )
 
     for m in all_matches:
         db.add(models.Match(
