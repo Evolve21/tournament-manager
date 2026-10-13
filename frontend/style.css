@@ -595,8 +595,8 @@ tr.qualify {
     box-sizing: border-box !important;
   }
 
-  body, html {
-    overflow-x: hidden;
+  html {
+    overflow-x: clip;
   }
 
   .container {
@@ -1113,13 +1113,38 @@ tr.qualify {
     grid-template-columns: minmax(0, 1fr);
   }
 
+  .match-card {
+    padding: 12px 10px;
+  }
+
   .match-row {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr) auto minmax(0, 1fr);
+    align-items: center;
     gap: 6px;
   }
 
   .team-title {
     min-width: 0;
+    font-size: 0.8rem;
+    line-height: 1.25;
     overflow-wrap: anywhere;
+  }
+
+  .score-box {
+    flex: none;
+    gap: 4px;
+  }
+
+  .match-card .score-box input.score-input {
+    flex: 0 0 42px;
+    width: 42px !important;
+    min-width: 42px !important;
+    max-width: 42px !important;
+    height: 36px !important;
+    padding: 0 !important;
+    text-align: center !important;
+    font-size: 1rem !important;
   }
 
   .archive-grid {
@@ -1138,6 +1163,54 @@ tr.qualify {
     right: 10px;
     bottom: 10px;
     max-width: calc(100vw - 20px);
+  }
+
+  .navbar {
+    position: sticky;
+    top: 0;
+    flex-direction: row !important;
+    align-items: center !important;
+    justify-content: space-between;
+    gap: 8px !important;
+    padding: 8px 10px !important;
+  }
+
+  .brand {
+    min-width: 0;
+    gap: 7px;
+  }
+
+  .brand-badge {
+    flex: 0 0 auto;
+    padding: 4px 6px;
+    font-size: 0.68rem;
+  }
+
+  .brand-text {
+    font-size: 0.82rem;
+    white-space: nowrap;
+  }
+
+  .nav-actions {
+    width: auto !important;
+    flex: 0 0 auto;
+    flex-wrap: nowrap !important;
+    gap: 6px !important;
+    margin: 0 !important;
+  }
+
+  .nav-actions .btn {
+    flex: 0 0 auto !important;
+    width: auto !important;
+    min-height: 38px;
+    padding: 7px 9px !important;
+    font-size: 0.72rem !important;
+    white-space: nowrap !important;
+  }
+
+  #adminModeButton,
+  .nav-actions .btn-danger {
+    display: none !important;
   }
 }
 
