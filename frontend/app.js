@@ -7,9 +7,21 @@ let currentTeams = [];
 let allMatches = [];
 const ADMIN_STORAGE_KEY = "tournament_admin_key";
 const DEFAULT_ADMIN_KEY = "turnier-admin";
+let mobileNavTransitionTimer;
 
 function updateMobileNavState() {
-  document.body.classList.toggle("is-scrolled", window.scrollY > 40);
+  const isScrolled = document.body.classList.contains("is-scrolled");
+  const shouldBeScrolled = isScrolled
+    ? window.scrollY > 16
+    : window.scrollY > 120;
+  if (shouldBeScrolled === isScrolled) return;
+
+  document.documentElement.classList.add("mobile-nav-transition");
+  document.body.classList.toggle("is-scrolled", shouldBeScrolled);
+  window.clearTimeout(mobileNavTransitionTimer);
+  mobileNavTransitionTimer = window.setTimeout(() => {
+    document.documentElement.classList.remove("mobile-nav-transition");
+  }, 250);
 }
 
 window.addEventListener("scroll", updateMobileNavState, { passive: true });

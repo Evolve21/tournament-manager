@@ -1081,6 +1081,10 @@ tr.qualify {
 }
 
 @media (max-width: 768px) {
+  html.mobile-nav-transition {
+    overflow-anchor: none;
+  }
+
   .hero-heading,
   .presentation-heading {
     align-items: stretch;
