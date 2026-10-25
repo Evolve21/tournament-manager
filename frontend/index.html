@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Turniermanager</title>
-  <link rel="stylesheet" href="style.css?v=20261013-4">
+  <link rel="stylesheet" href="style.css?v=20261025-1">
 </head>
 <body>
 
@@ -117,6 +117,9 @@
       </div>
 
       <div id="validationMsg" class="alert hidden"></div>
+      <div id="groupSizeNotice" class="notice hidden" role="status">
+        Die Teamanzahl geht nicht glatt auf. Die Teams werden möglichst gleichmäßig auf die Gruppen verteilt; manche Gruppen haben dadurch ein Team mehr oder weniger.
+      </div>
 
       <div class="panel-foot">
         <button class="btn btn-primary btn-large" id="startBtn" data-admin-only onclick="startTournament()">
@@ -202,6 +205,6 @@
 
   </main>
 
-  <script src="app.js?v=20261013-5"></script>
+  <script src="app.js?v=20261025-1"></script>
 </body>
 </html>

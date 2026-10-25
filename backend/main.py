@@ -166,6 +166,15 @@ def start_knockout(request: Request, db: Session = Depends(get_db)):
     existing_ko = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "knockout").first()
     if existing_ko:
         raise HTTPException(status_code=400, detail="K.-o.-Baum existiert bereits.")
+    if t.status != "group_stage":
+        raise HTTPException(status_code=400, detail="Der K.-o.-Baum kann nur nach einer laufenden Gruppenphase generiert werden.")
+
+    group_matches = db.query(models.Match).filter(
+        models.Match.tournament_id == t.id,
+        models.Match.stage == "group"
+    ).all()
+    if not group_matches:
+        raise HTTPException(status_code=400, detail="Es gibt keine Gruppenspiele für dieses Turnier.")
 
     incomplete_match = db.query(models.Match).filter(
         models.Match.tournament_id == t.id,
@@ -176,7 +185,6 @@ def start_knockout(request: Request, db: Session = Depends(get_db)):
         raise HTTPException(status_code=400, detail="Alle Gruppenspiele müssen beendet sein, bevor der K.-o.-Baum generiert werden kann.")
 
     teams = db.query(models.Team).filter(models.Team.tournament_id == t.id).all()
-    group_matches = db.query(models.Match).filter(models.Match.tournament_id == t.id, models.Match.stage == "group").all()
 
     qualified = []
     if t.mode == "groups":

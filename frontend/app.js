@@ -8,6 +8,7 @@ let allMatches = [];
 const ADMIN_STORAGE_KEY = "tournament_admin_key";
 const DEFAULT_ADMIN_KEY = "turnier-admin";
 let mobileNavTransitionTimer;
+let liveMessageTimer;
 
 function updateMobileNavState() {
   const isScrolled = document.body.classList.contains("is-scrolled");
@@ -16,6 +17,10 @@ function updateMobileNavState() {
     : window.scrollY > 120;
   if (shouldBeScrolled === isScrolled) return;
 
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
+    document.body.classList.toggle("is-scrolled", shouldBeScrolled);
+    return;
+  }
   document.documentElement.classList.add("mobile-nav-transition");
   document.body.classList.toggle("is-scrolled", shouldBeScrolled);
   window.clearTimeout(mobileNavTransitionTimer);
@@ -66,9 +71,20 @@ function toggleModeInfo(infoId, button) {
 
 function setLiveMessage(message, isError = false) {
   const liveMessage = document.getElementById("liveMessage");
+  window.clearTimeout(liveMessageTimer);
+  liveMessage.classList.remove("is-visible");
   liveMessage.textContent = message;
-  liveMessage.classList.toggle("hidden", !message);
   liveMessage.classList.toggle("is-error", isError);
+  if (!message) {
+    liveMessageTimer = window.setTimeout(() => liveMessage.classList.add("hidden"), 220);
+    return;
+  }
+
+  liveMessage.classList.remove("hidden");
+  requestAnimationFrame(() => liveMessage.classList.add("is-visible"));
+  if (message === "Spielstand gespeichert." && !isError) {
+    liveMessageTimer = window.setTimeout(() => setLiveMessage(""), 2500);
+  }
 }
 
 function togglePresentationMode() {
@@ -306,6 +322,12 @@ function validateStart() {
   }
 
   startBtn.disabled = !valid;
+  const groupSizeNotice = document.getElementById("groupSizeNotice");
+  const groupSize = parseInt(document.getElementById("groupSizeSelect").value);
+  groupSizeNotice.classList.toggle(
+    "hidden",
+    currentMode !== "groups" || n < 2 || n % groupSize === 0
+  );
   if (!valid && text) {
     msg.textContent = text;
     msg.classList.remove("hidden");
@@ -387,7 +409,14 @@ async function triggerKnockout() {
     return;
   }
 
-  const res = await protectedFetch(`${API_URL}/tournament/start-knockout`, { method: "POST" }, true);
+  let res;
+  try {
+    res = await protectedFetch(`${API_URL}/tournament/start-knockout`, { method: "POST" }, true);
+  } catch (error) {
+    console.error("K.-o.-Baum konnte nicht angefordert werden:", error);
+    setLiveMessage("Der K.-o.-Baum konnte nicht angefordert werden. Bitte Verbindung prüfen.", true);
+    return;
+  }
   if (res.ok) {
     document.getElementById("btnTriggerKO").classList.add("hidden");
     init();
@@ -528,7 +557,7 @@ async function renderStandings() {
     let html = `
       <div style="margin-bottom: 20px;">
         <span class="table-title">// ${groupName}</span>
-        <div class="table-scroll"><table>
+        <div class="table-scroll"><table class="standings-table">
           <thead>
             <tr>
               <th>#</th>
