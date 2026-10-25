@@ -1,9 +1,11 @@
+from pathlib import Path
+
 from sqlalchemy import create_engine
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 
-# 1. Wo liegt die Datenbank?
-DATABASE_URL = "sqlite:///./tournament.db"
+# Keep SQLite data in the backend directory, regardless of the process working directory.
+DATABASE_URL = f"sqlite:///{Path(__file__).resolve().parent / 'tournament.db'}"
 
 # 2. Der Motor (Engine): Stellt die physische Verbindung zur Datei her
 engine = create_engine(

@@ -557,7 +557,7 @@ async function renderStandings() {
     let html = `
       <div style="margin-bottom: 20px;">
         <span class="table-title">// ${groupName}</span>
-        <div class="table-scroll"><table class="standings-table">
+        <div class="table-scroll"><table>
           <thead>
             <tr>
               <th>#</th>

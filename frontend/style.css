@@ -1282,48 +1282,6 @@ tr.qualify {
     pointer-events: none;
   }
 
-  .standings-table {
-    min-width: 600px !important;
-    border-collapse: separate !important;
-    border-spacing: 0;
-  }
-
-  .standings-table th:first-child,
-  .standings-table td:first-child {
-    position: sticky;
-    left: 0;
-    z-index: 2;
-    width: 34px;
-    min-width: 34px;
-    background: var(--bg-panel);
-  }
-
-  .standings-table th:nth-child(2),
-  .standings-table td:nth-child(2) {
-    position: sticky;
-    left: 34px;
-    z-index: 2;
-    width: 112px;
-    min-width: 112px;
-    max-width: 112px;
-    background: var(--bg-panel);
-  }
-
-  .standings-table th:first-child,
-  .standings-table th:nth-child(2) {
-    z-index: 3;
-    background: var(--bg-surface);
-  }
-
-  .standings-table td:nth-child(2) strong {
-    display: block;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .standings-table tr.qualify td:nth-child(2) {
-    background: #102a2c;
-  }
 }
 
 @media (prefers-reduced-motion: reduce) {
